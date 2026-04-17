@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+venv/
+logos/nba/
+logos/nfl/
+logos/nba_web/
+logos/nfl_web/
+logos/backup/
+logos-new/
+*.json.tmp
+.DS_Store

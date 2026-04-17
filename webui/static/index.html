@@ -1,0 +1,2231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Scoratron</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;600;700;900&display=swap" rel="stylesheet">
+<style>
+/* ── Theme tokens ── */
+:root {
+  --accent:   #7c3aed;
+  --accent2:  #a855f7;
+  --green:    #22c55e;
+  --red:      #ef4444;
+  --yellow:   #f59e0b;
+  --mono:     'Share Tech Mono', monospace;
+  --display:  'Barlow Condensed', sans-serif;
+  --radius:   12px;
+  --radius-sm: 8px;
+}
+
+/* Dark mode (default) */
+:root, [data-theme="dark"] {
+  --bg:       #111113;
+  --surface:  #1c1c1f;
+  --surface2: #26262b;
+  --border:   #303035;
+  --text:     #f0f0f5;
+  --muted:    #70707a;
+  --shadow:   0 2px 8px rgba(0,0,0,0.4);
+  --header-bg: #1c1c1f;
+  --header-border: #303035;
+  --nav-bg:   #1c1c1f;
+}
+
+/* Light mode */
+[data-theme="light"] {
+  --bg:       #f4f4f6;
+  --surface:  #ffffff;
+  --surface2: #f0f0f3;
+  --border:   #e2e2e8;
+  --text:     #111114;
+  --muted:    #888890;
+  --shadow:   0 2px 8px rgba(0,0,0,0.08);
+  --header-bg: var(--accent);
+  --header-border: transparent;
+  --nav-bg:   #ffffff;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--display);
+  font-weight: 400;
+  min-height: 100vh;
+  overflow-x: hidden;
+  transition: background 0.2s, color 0.2s;
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 28px;
+  height: 56px;
+  border-bottom: 1px solid var(--header-border);
+  background: var(--header-bg);
+  transition: background 0.2s;
+}
+
+/* Logo — SVG icon + wordmark, single color */
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+.logo-icon {
+  width: 28px; height: 28px;
+  flex-shrink: 0;
+}
+[data-theme="light"] .logo-icon { color: #fff; }
+[data-theme="dark"]  .logo-icon, :root .logo-icon { color: var(--accent); }
+
+.logo-wordmark {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 20px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+}
+[data-theme="light"] .logo-wordmark { color: #fff; }
+[data-theme="dark"]  .logo-wordmark, :root .logo-wordmark { color: var(--text); }
+
+/* Theme toggle button */
+.theme-toggle {
+  width: 36px; height: 36px;
+  border-radius: 50%;
+  border: none;
+  cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+[data-theme="light"] .theme-toggle { background: rgba(255,255,255,0.2); color: #fff; }
+[data-theme="dark"]  .theme-toggle, :root .theme-toggle { background: var(--surface2); color: var(--text); }
+.theme-toggle:hover { opacity: 0.8; }
+.theme-toggle svg { width: 18px; height: 18px; }
+
+.status-dot {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--green);
+  box-shadow: 0 0 6px var(--green);
+  animation: pulse 2s infinite;
+  display: inline-block;
+  margin-right: 6px;
+}
+.status-dot.off { background: var(--red); box-shadow: 0 0 6px var(--red); animation: none; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+
+.header-right {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--muted);
+  font-family: var(--mono);
+}
+[data-theme="light"] .header-right { color: rgba(255,255,255,0.8); }
+
+nav {
+  display: flex;
+  gap: 0;
+  background: var(--nav-bg);
+  border-bottom: 1px solid var(--border);
+  padding: 0 28px;
+  overflow-x: auto;
+}
+
+.nav-tab {
+  padding: 0 20px;
+  height: 44px;
+  font-family: var(--display);
+  font-weight: 600;
+  font-size: 12px;
+  letter-spacing: 1.5px;
+  text-transform: uppercase;
+  color: var(--muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: color 0.15s, border-color 0.15s;
+  background: none;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+  white-space: nowrap;
+}
+.nav-tab:hover { color: var(--text); }
+.nav-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+.page { display: none; padding: 28px 32px; max-width: 1400px; margin: 0 auto; }
+.page.active { display: block; }
+
+/* ── Matrix Preview ── */
+.preview-section {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: var(--shadow);
+}
+
+.section-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+#matrix-preview {
+  display: block;
+  width: 100%;
+  max-width: 896px;
+  height: auto;
+  image-rendering: pixelated;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: #000;
+}
+
+.preview-wrapper {
+  position: relative;
+  display: inline-block;
+  width: 100%;
+  max-width: 896px;
+}
+
+.preview-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: #303050;
+  margin-top: 8px;
+  letter-spacing: 1px;
+}
+
+/* ── Games List ── */
+.games-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.game-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  cursor: pointer;
+  transition: all 0.2s;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.game-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: var(--border);
+  transition: background 0.2s;
+}
+
+.game-card:hover { border-color: var(--accent); }
+.game-card:hover::before { background: var(--accent); }
+.game-card.pinned { border-color: var(--accent2); }
+.game-card.pinned::before { background: var(--accent2); }
+.game-card.live::before { background: var(--green); animation: pulse 2s infinite; }
+
+.game-teams {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.team-block { text-align: center; }
+
+.team-abbr {
+  font-family: var(--display);
+  font-weight: 900;
+  font-size: 22px;
+  letter-spacing: 2px;
+}
+
+.team-score {
+  font-family: var(--mono);
+  font-size: 28px;
+  font-weight: bold;
+  color: var(--text);
+}
+
+.game-divider {
+  font-family: var(--mono);
+  color: #404060;
+  font-size: 20px;
+  padding: 0 12px;
+}
+
+.game-status {
+  text-align: center;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: #606080;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.game-status .live-badge {
+  color: var(--green);
+  font-weight: bold;
+}
+
+.game-status .final-badge { color: #606080; }
+.game-status .pre-badge { color: var(--yellow); }
+
+.pin-btn {
+  position: absolute;
+  top: 8px; right: 8px;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: #404060;
+  font-size: 10px;
+  font-family: var(--mono);
+  letter-spacing: 1px;
+  padding: 3px 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.pin-btn:hover, .pin-btn.active {
+  border-color: var(--accent2);
+  color: var(--accent2);
+}
+
+/* ── Controls ── */
+.controls-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 16px;
+  margin-bottom: 24px;
+}
+
+.control-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+
+.control-label {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: 12px;
+}
+
+.control-value {
+  font-family: var(--mono);
+  font-size: 24px;
+  color: var(--accent);
+  margin-bottom: 12px;
+}
+
+input[type=range] {
+  width: 100%;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border);
+  outline: none;
+  margin: 8px 0;
+}
+
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 16px; height: 16px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  box-shadow: 0 0 8px rgba(124,58,237,0.4);
+}
+
+select, input[type=number] {
+  width: 100%;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-family: var(--mono);
+  font-size: 14px;
+  padding: 8px 12px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+
+select:focus, input[type=number]:focus { border-color: var(--accent); }
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: pointer;
+}
+
+.toggle-track {
+  width: 44px; height: 24px;
+  background: var(--border);
+  border-radius: 12px;
+  position: relative;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.toggle-track.on { background: var(--accent); box-shadow: 0 0 8px rgba(124,58,237,0.3); }
+
+.toggle-thumb {
+  width: 18px; height: 18px;
+  background: white;
+  border-radius: 50%;
+  position: absolute;
+  top: 3px; left: 3px;
+  transition: left 0.2s;
+}
+
+.toggle-track.on .toggle-thumb { left: 23px; }
+
+.toggle-label {
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--text);
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 20px;
+  border-radius: 4px;
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 13px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: all 0.2s;
+  border: 1px solid;
+}
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+.btn-primary:hover { box-shadow: 0 0 16px rgba(124,58,237,0.4); }
+
+.btn-secondary {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+
+.btn-danger {
+  background: transparent;
+  border-color: var(--red);
+  color: var(--red);
+}
+
+.btn-danger:hover { background: var(--red); color: white; }
+
+.btn-warning {
+  background: transparent;
+  border-color: var(--accent2);
+  color: var(--accent2);
+}
+
+.btn-warning:hover { background: var(--accent2); color: white; }
+
+/* ── Sysinfo ── */
+.sysinfo-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 12px;
+}
+
+.sysinfo-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  text-align: center;
+  box-shadow: var(--shadow);
+}
+
+.sysinfo-val {
+  font-family: var(--mono);
+  font-size: 20px;
+  color: var(--accent);
+  margin-bottom: 4px;
+}
+
+.sysinfo-key {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--muted);
+  text-transform: uppercase;
+}
+
+/* ── API Data ── */
+.api-section { margin-bottom: 24px; }
+
+.api-league-header {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 18px;
+  letter-spacing: 3px;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--border);
+}
+
+.api-event {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  margin-bottom: 8px;
+  overflow: hidden;
+}
+
+.api-event-header {
+  padding: 12px 16px;
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-family: var(--mono);
+  font-size: 13px;
+  transition: background 0.2s;
+}
+
+.api-event-header:hover { background: var(--surface2); }
+
+.api-event-body {
+  display: none;
+  padding: 0 16px 16px;
+}
+
+.api-event-body.open { display: block; }
+
+pre {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: #8080a0;
+  overflow-x: auto;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+/* ── Simulator ── */
+.sim-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin-bottom: 24px;
+}
+
+.sim-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 20px;
+  box-shadow: var(--shadow);
+}
+
+.sim-title {
+  font-family: var(--display);
+  font-weight: 700;
+  font-size: 16px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+  margin-bottom: 16px;
+  color: var(--accent2);
+}
+
+.form-group { margin-bottom: 12px; }
+
+.form-label {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 2px;
+  color: var(--muted);
+  text-transform: uppercase;
+  margin-bottom: 6px;
+  display: block;
+}
+
+.btn-row {
+  display: flex;
+  gap: 12px;
+  margin-top: 16px;
+  flex-wrap: wrap;
+}
+
+/* ── Toast ── */
+.toast {
+  position: fixed;
+  bottom: 32px;
+  right: 32px;
+  background: var(--surface);
+  border: 1px solid var(--accent);
+  border-radius: var(--radius-sm);
+  padding: 12px 20px;
+  font-family: var(--mono);
+  font-size: 13px;
+  color: var(--accent);
+  opacity: 0;
+  transform: translateY(8px);
+  transition: all 0.3s;
+  z-index: 1000;
+  box-shadow: var(--shadow);
+}
+
+.toast.show { opacity: 1; transform: translateY(0); }
+.toast.error { border-color: var(--red); color: var(--red); }
+
+/* ── Misc ── */
+.flex-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.mt16 { margin-top: 16px; }
+.chevron { transition: transform 0.2s; display: inline-block; }
+.chevron.open { transform: rotate(180deg); }
+
+/* ── Code Editor ── */
+#page-code { padding: 16px 32px 0; }
+.code-layout {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  gap: 12px;
+  height: calc(100vh - 132px);
+}
+.code-tree {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow-y: auto;
+  padding: 8px 0;
+  min-height: 0;
+  box-shadow: var(--shadow);
+}
+.code-editor-panel {
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  min-height: 0;
+  box-shadow: var(--shadow);
+}
+.code-editor-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+  flex-shrink: 0;
+}
+#code-filename { font-family: var(--mono); font-size: 12px; color: var(--accent); letter-spacing: 1px; }
+#monaco-container { flex: 1; min-height: 0; }
+.tree-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+}
+.tree-item:hover { background: var(--surface2); }
+.tree-item.active { background: rgba(0,229,255,0.08); color: var(--accent); }
+.tree-children { padding-left: 14px; }
+.dir-arrow { transition: transform 0.15s; display: inline-block; font-size: 9px; color: #404060; }
+.tree-dir.open > .tree-item .dir-arrow { transform: rotate(90deg); }
+</style>
+</head>
+<body>
+
+<header>
+  <!-- Logo -->
+  <a class="logo" href="#">
+    <span class="logo-wordmark">Scoratron</span>
+  </a>
+
+  <div class="header-right">
+    <span><span class="status-dot" id="service-dot"></span><span id="service-status">checking...</span></span>
+    <span id="header-ip">—</span>
+    <button class="theme-toggle" onclick="toggleTheme()" title="Toggle light/dark mode">
+      <svg id="theme-icon-dark" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <circle cx="12" cy="12" r="5"/>
+        <line x1="12" y1="1" x2="12" y2="3"/>
+        <line x1="12" y1="21" x2="12" y2="23"/>
+        <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/>
+        <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/>
+        <line x1="1" y1="12" x2="3" y2="12"/>
+        <line x1="21" y1="12" x2="23" y2="12"/>
+        <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/>
+        <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+      </svg>
+      <svg id="theme-icon-light" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+        <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+      </svg>
+    </button>
+  </div>
+</header>
+
+<nav>
+  <button class="nav-tab active" onclick="showPage('dashboard')">Dashboard</button>
+  <button class="nav-tab" onclick="showPage('controls')">Controls</button>
+  <button class="nav-tab" onclick="showPage('simulator')">Simulator</button>
+  <button class="nav-tab" onclick="showPage('parade')">Logo Parade</button>
+  <button class="nav-tab" onclick="showPage('apidata')">API Data</button>
+  <button class="nav-tab" onclick="showPage('system')">System</button>
+  <button class="nav-tab" onclick="showPage('weather')">Weather</button>
+  <button class="nav-tab" onclick="showPage('wifi')">WiFi</button>
+  <button class="nav-tab" onclick="showPage('code')">Code</button>
+</nav>
+
+<!-- ── DASHBOARD ── -->
+<div class="page active" id="page-dashboard">
+  <div class="preview-section">
+    <div class="section-label">// live matrix preview</div>
+    <div class="preview-wrapper">
+      <canvas id="matrix-preview" width="896" height="224"></canvas>
+      <div class="preview-label" id="preview-label">No game data</div>
+    </div>
+  </div>
+
+  <div class="section-label">// live games</div>
+  <div class="games-grid" id="games-grid">
+    <div style="color:#404060;font-family:var(--mono);font-size:13px">Loading games...</div>
+  </div>
+</div>
+
+<!-- ── CONTROLS ── -->
+<div class="page" id="page-controls">
+  <div class="section-label">// display settings</div>
+  <div class="controls-grid">
+
+    <div class="control-card">
+      <div class="control-label">Sport Mode</div>
+      <select id="ctrl-sport" onchange="settingChanged()">
+        <option value="auto">Auto (NFL + NBA)</option>
+        <option value="nba">NBA Only</option>
+        <option value="nfl">NFL Only</option>
+      </select>
+    </div>
+
+    <div class="control-card">
+      <div class="control-label">Scroll Mode</div>
+      <div class="toggle" onclick="toggleScroll()">
+        <div class="toggle-track" id="scroll-toggle"><div class="toggle-thumb"></div></div>
+        <span class="toggle-label" id="scroll-label">Enabled</span>
+      </div>
+    </div>
+
+    <div class="control-card">
+      <div class="control-label">Scroll Dwell</div>
+      <div class="control-value"><span id="dwell-val">10</span>s</div>
+      <input type="range" id="ctrl-dwell" min="5" max="60" step="5" value="10"
+             oninput="document.getElementById('dwell-val').textContent=this.value" onchange="settingChanged()">
+    </div>
+
+    <div class="control-card">
+      <div class="control-label">Refresh Rate</div>
+      <div class="control-value"><span id="refresh-val">15</span>s</div>
+      <input type="range" id="ctrl-refresh" min="10" max="60" step="5" value="15"
+             oninput="document.getElementById('refresh-val').textContent=this.value" onchange="settingChanged()">
+    </div>
+
+    <div class="control-card">
+      <div class="control-label">Brightness</div>
+      <div class="control-value"><span id="brightness-val">60</span>%</div>
+      <input type="range" id="ctrl-brightness" min="10" max="100" step="5" value="60"
+             oninput="document.getElementById('brightness-val').textContent=this.value" onchange="settingChanged()">
+    </div>
+
+    <div class="control-card">
+      <div class="control-label">Continuous Scroll</div>
+      <div style="font-size:11px;color:#606080;margin-bottom:8px">Smoothly scrolls all full-screen games on a continuous loop</div>
+      <div class="toggle" onclick="toggleContinuousScroll()">
+        <div class="toggle-track" id="contscroll-toggle"><div class="toggle-thumb"></div></div>
+        <span class="toggle-label" id="contscroll-label">Disabled</span>
+      </div>
+    </div>
+
+
+  </div>
+
+  <div class="flex-row mt16">
+    <button class="btn btn-primary" onclick="applySettings()">Apply Settings</button>
+    <button class="btn btn-secondary" onclick="loadSettings()">Reset</button>
+  </div>
+</div>
+
+<!-- ── SIMULATOR ── -->
+<div class="page" id="page-simulator">
+  <div class="section-label">// inject test game data</div>
+
+  <!-- Game State — full width, above teams -->
+  <div class="sim-card" style="margin-bottom:16px">
+    <div class="sim-title">Game State</div>
+    <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px">
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Sport</label>
+        <select id="sim-sport" onchange="updateSimTeams()">
+          <option value="nba">NBA</option>
+          <option value="nfl">NFL</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Period</label>
+        <select id="sim-period">
+          <option value="1">Q1</option>
+          <option value="2">Q2</option>
+          <option value="3">Q3</option>
+          <option value="4" selected>Q4</option>
+          <option value="5">OT</option>
+        </select>
+      </div>
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Clock</label>
+        <input type="text" id="sim-clock" value="2:15" style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:14px;padding:8px 12px;outline:none;">
+      </div>
+      <div class="form-group" style="margin:0">
+        <label class="form-label">Flags</label>
+        <div style="display:flex;gap:16px;margin-top:6px">
+          <label style="font-family:var(--mono);font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" id="sim-halftime"> Halftime
+          </label>
+          <label style="font-family:var(--mono);font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" id="sim-ot"> OT
+          </label>
+          <label style="font-family:var(--mono);font-size:12px;display:flex;align-items:center;gap:6px;cursor:pointer">
+            <input type="checkbox" id="sim-playoff" onchange="toggleSimPlayoff()"> Playoff
+          </label>
+        </div>
+      </div>
+      <div id="sim-nfl-fields" style="display:none;grid-column:1/-1">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Down &amp; Distance</label>
+            <input type="text" id="sim-down-distance" value="" maxlength="16" placeholder="e.g. 3rd &amp; 7"
+                   style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:14px;padding:8px 12px;outline:none;">
+          </div>
+          <div class="form-group" style="margin:0">
+            <label class="form-label">Possession (team abbr)</label>
+            <input type="text" id="sim-possession" value="" maxlength="4" placeholder="e.g. KC"
+                   style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:14px;padding:8px 12px;outline:none;text-transform:uppercase">
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="sim-series-section" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+      <div style="display:grid;grid-template-columns:1fr auto 1fr;align-items:center;gap:8px;max-width:300px">
+        <div style="text-align:center">
+          <div style="font-family:var(--mono);font-size:10px;color:#404060;margin-bottom:4px">AWAY WINS</div>
+          <div style="display:flex;align-items:center;justify-content:center;gap:8px">
+            <button onclick="adjustWins('away',-1)" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:4px;width:28px;height:28px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center">−</button>
+            <span id="sim-away-wins-val" style="font-family:var(--mono);font-size:22px;color:var(--accent);min-width:20px;text-align:center">0</span>
+            <button onclick="adjustWins('away',1)" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:4px;width:28px;height:28px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center">+</button>
+          </div>
+        </div>
+        <div style="font-family:var(--mono);color:#404060;font-size:18px">—</div>
+        <div style="text-align:center">
+          <div style="font-family:var(--mono);font-size:10px;color:#404060;margin-bottom:4px">HOME WINS</div>
+          <div style="display:flex;align-items:center;justify-content:center;gap:8px">
+            <button onclick="adjustWins('home',-1)" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:4px;width:28px;height:28px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center">−</button>
+            <span id="sim-home-wins-val" style="font-family:var(--mono);font-size:22px;color:var(--accent);min-width:20px;text-align:center">0</span>
+            <button onclick="adjustWins('home',1)" style="background:var(--surface2);border:1px solid var(--border);color:var(--text);border-radius:4px;width:28px;height:28px;cursor:pointer;font-size:16px;display:flex;align-items:center;justify-content:center">+</button>
+          </div>
+        </div>
+      </div>
+      <div style="font-family:var(--mono);font-size:11px;color:#606080;margin-top:8px" id="sim-series-preview">Tied 0-0 · Game 1</div>
+    </div>
+  </div>
+
+  <!-- Away + Home team cards -->
+  <div class="sim-grid" style="margin-bottom:16px">
+    <div class="sim-card">
+      <div class="sim-title">Away Team</div>
+      <div class="form-group">
+        <label class="form-label">Team</label>
+        <select id="sim-away-abbr"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Score</label>
+        <input type="number" id="sim-away-score" value="98">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Win Probability %</label>
+        <input type="number" id="sim-away-pct" value="65" min="0" max="100">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Record (e.g. 47-20)</label>
+        <input type="text" id="sim-away-record" value="" maxlength="8" placeholder="optional"
+               style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:14px;padding:8px 12px;outline:none;">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Playoff Seed</label>
+        <input type="number" id="sim-away-seed" value="0" min="0" max="8">
+      </div>
+      <div class="btn-row" style="margin-top:12px">
+        <button class="btn btn-secondary" onclick="flashScore('away')" style="font-size:11px;padding:6px 12px">Flash Score</button>
+      </div>
+    </div>
+
+    <div class="sim-card">
+      <div class="sim-title">Home Team</div>
+      <div class="form-group">
+        <label class="form-label">Team</label>
+        <select id="sim-home-abbr"></select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Score</label>
+        <input type="number" id="sim-home-score" value="94">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Record (e.g. 41-26)</label>
+        <input type="text" id="sim-home-record" value="" maxlength="8" placeholder="optional"
+               style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:14px;padding:8px 12px;outline:none;">
+      </div>
+      <div class="form-group">
+        <label class="form-label">Playoff Seed</label>
+        <input type="number" id="sim-home-seed" value="0" min="0" max="8">
+      </div>
+      <div class="btn-row" style="margin-top:12px">
+        <button class="btn btn-secondary" onclick="flashScore('home')" style="font-size:11px;padding:6px 12px">Flash Score</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Actions -->
+  <div class="sim-card">
+    <div class="sim-title">Actions</div>
+    <p style="font-family:var(--mono);font-size:12px;color:#606080;margin-bottom:16px;line-height:1.6">
+      Inject fake game data to test the display. The scoratron service will show the simulated game.
+    </p>
+    <div class="btn-row">
+      <button class="btn btn-warning" onclick="runSim()">Inject Simulation</button>
+      <button class="btn btn-secondary" onclick="clearSim()">Clear &amp; Resume Live</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── LOGO PARADE ── -->
+<div class="page" id="page-parade">
+  <div class="section-label">// logo parade</div>
+  <div class="controls-grid" style="margin-bottom:24px">
+
+    <div class="control-card">
+      <div class="control-label">Sport</div>
+      <select id="parade-sport">
+        <option value="nba">NBA</option>
+        <option value="nfl">NFL</option>
+        <option value="both">Both</option>
+      </select>
+    </div>
+
+    <div class="control-card">
+      <div class="control-label">Status</div>
+      <div class="control-value" id="parade-status-val" style="font-size:18px;color:#606080">—</div>
+      <div style="font-family:var(--mono);font-size:11px;color:#404060;margin-top:4px">
+        Scrolls all team logos across the matrix
+      </div>
+    </div>
+
+  </div>
+  <div class="flex-row">
+    <button class="btn btn-primary" id="parade-start-btn" onclick="startParade()">Start Parade</button>
+    <button class="btn btn-danger" id="parade-stop-btn" onclick="stopParade()" disabled>Stop</button>
+  </div>
+</div>
+
+<!-- ── API DATA ── -->
+<div class="page" id="page-apidata">
+  <div class="flex-row" style="margin-bottom:24px">
+    <div class="section-label" style="margin:0">// raw espn api data</div>
+    <button class="btn btn-secondary" onclick="loadApiData()">Refresh</button>
+  </div>
+  <div id="api-data-container">
+    <div style="color:#404060;font-family:var(--mono);font-size:13px">Loading...</div>
+  </div>
+</div>
+
+<!-- ── SYSTEM ── -->
+<div class="page" id="page-system">
+  <div class="section-label">// system information</div>
+  <div class="sysinfo-grid" id="sysinfo-grid" style="margin-bottom:32px">
+    <div style="color:#404060;font-family:var(--mono);font-size:13px">Loading...</div>
+  </div>
+
+  <div class="section-label">// service controls</div>
+  <div class="flex-row mt16">
+    <button class="btn btn-secondary" onclick="forceRefresh()">Force API Refresh</button>
+    <button class="btn btn-warning" onclick="restartService()">Restart Service</button>
+  </div>
+</div>
+
+<!-- ── WEATHER ── -->
+<div class="page" id="page-weather" style="padding:32px">
+  <div class="section-label">// weather display</div>
+
+  <div style="display:flex;gap:24px;flex-wrap:wrap;margin-top:16px">
+    <!-- Config card -->
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:20px;min-width:280px;flex:1">
+      <div style="font-size:12px;color:#606080;margin-bottom:12px">CONFIGURATION</div>
+      <label style="display:block;font-size:13px;color:#909090;margin-bottom:6px">ZIP Code</label>
+      <div style="display:flex;gap:8px;margin-bottom:16px">
+        <input type="text" id="weather-zip" maxlength="10" placeholder="e.g. 90210"
+          style="flex:1;background:var(--surface);border:1px solid var(--border);border-radius:6px;
+                 padding:8px 12px;color:var(--text);font-family:var(--mono);font-size:14px">
+        <button class="btn btn-primary" onclick="saveWeatherSettings()" style="padding:8px 16px">Save</button>
+      </div>
+      <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-top:4px">
+        <input type="checkbox" id="weather-force"
+          style="appearance:none;-webkit-appearance:none;width:18px;height:18px;
+                 border:2px solid var(--border);border-radius:4px;background:var(--surface);
+                 cursor:pointer;position:relative;flex-shrink:0"
+          onchange="saveWeatherSettings()">
+        <span style="font-size:14px">Force weather display (overrides game scores)</span>
+      </label>
+    </div>
+
+    <!-- Current weather card -->
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:20px;min-width:280px;flex:1">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+        <div style="font-size:12px;color:#606080">CURRENT CONDITIONS</div>
+        <button class="btn btn-secondary" onclick="loadWeatherPreview()" style="padding:4px 12px;font-size:12px">Refresh</button>
+      </div>
+      <div id="weather-preview">
+        <div style="color:#404060;font-family:var(--mono);font-size:13px">No zip code configured.</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── WIFI ── -->
+<div class="page" id="page-wifi">
+  <div class="section-label">// wifi settings</div>
+
+  <div id="wifi-status-card" style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:16px 20px;margin-bottom:24px">
+    <div style="font-size:12px;color:#606080;margin-bottom:6px">CURRENT CONNECTION</div>
+    <div id="wifi-current" style="font-family:var(--mono);font-size:16px;color:var(--green)">Loading...</div>
+    <div id="wifi-ip" style="font-family:var(--mono);font-size:12px;color:#606080;margin-top:4px"></div>
+  </div>
+
+  <div class="section-label">// available networks</div>
+  <div class="flex-row mt16" style="margin-bottom:12px">
+    <button class="btn btn-secondary" onclick="scanWifi()">Scan</button>
+  </div>
+  <div id="wifi-networks" style="font-family:var(--mono);font-size:13px;color:#404060">Press Scan to list nearby networks.</div>
+
+  <div id="wifi-connect-form" style="display:none;margin-top:24px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:20px">
+    <div class="section-label" style="margin-bottom:12px">// connect to: <span id="wifi-connect-ssid" style="color:var(--accent)"></span></div>
+    <div class="form-group">
+      <label class="form-label">Password (leave blank for open networks)</label>
+      <input type="password" id="wifi-password" placeholder="Network password"
+             style="width:100%;background:var(--surface);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:14px;padding:8px 12px;outline:none">
+    </div>
+    <div class="flex-row mt16">
+      <button class="btn btn-primary" onclick="connectWifi()">Connect</button>
+      <button class="btn btn-secondary" onclick="document.getElementById('wifi-connect-form').style.display='none'">Cancel</button>
+    </div>
+  </div>
+
+  <div id="wifi-forget-section" style="display:none;margin-top:24px">
+    <div class="section-label">// manage saved network</div>
+    <div class="flex-row mt16">
+      <button class="btn btn-warning" onclick="forgetWifi()">Forget Current Network</button>
+    </div>
+    <div style="font-size:11px;color:#606080;margin-top:8px">Scoratron will reboot into WiFi setup mode on next restart.</div>
+  </div>
+</div>
+
+<!-- ── CODE EDITOR ── -->
+<div class="page" id="page-code">
+  <div class="code-layout">
+    <div class="code-tree" id="code-tree">
+      <div style="padding:16px;font-family:var(--mono);font-size:12px;color:#404060">Loading files...</div>
+    </div>
+    <div class="code-editor-panel">
+      <div class="code-editor-toolbar">
+        <span id="code-filename" style="color:#606080">Select a file to edit</span>
+        <div class="flex-row" style="gap:8px">
+          <span id="code-save-status" style="font-family:var(--mono);font-size:11px;color:#404060"></span>
+          <button class="btn btn-primary" id="code-save-btn" onclick="saveCodeFile()" disabled style="padding:6px 14px">Save</button>
+        </div>
+      </div>
+      <div id="monaco-container"></div>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ── Theme ────────────────────────────────────────────────────────────────────
+function toggleTheme() {
+  const isDark = document.documentElement.getAttribute('data-theme') !== 'light';
+  const next = isDark ? 'light' : 'dark';
+  document.documentElement.setAttribute('data-theme', next);
+  localStorage.setItem('scoratron-theme', next);
+  document.getElementById('theme-icon-dark').style.display  = next === 'light' ? 'block' : 'none';
+  document.getElementById('theme-icon-light').style.display = next === 'dark'  ? 'block' : 'none';
+}
+(function() {
+  const saved = localStorage.getItem('scoratron-theme') || 'dark';
+  document.documentElement.setAttribute('data-theme', saved);
+  if (saved === 'light') {
+    const d = document.getElementById('theme-icon-dark');
+    const l = document.getElementById('theme-icon-light');
+    if (d) d.style.display = 'none';
+    if (l) l.style.display = 'block';
+  }
+})();
+
+const PIXEL_SCALE = 7;
+const W = 128, H = 32;
+
+let settings = {};
+let games = [];
+let currentGameIdx = 0;
+let previewInterval = null;
+let scrollEnabled = true;
+let continuousScrollEnabled = false;
+
+// ── Navigation ──────────────────────────────────────────────────────────────
+function showPage(id) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-tab').forEach(t => t.classList.remove('active'));
+  document.getElementById('page-' + id).classList.add('active');
+  event.target.classList.add('active');
+  if (id === 'apidata') loadApiData();
+  if (id === 'system') loadSysInfo();
+  if (id === 'parade') loadParadeStatus();
+  if (id === 'weather') loadWeatherPage();
+  if (id === 'wifi') loadWifiStatus();
+  if (id === 'code') loadCodeFiles();
+}
+
+// ── Toast ────────────────────────────────────────────────────────────────────
+function toast(msg, err=false) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show' + (err ? ' error' : '');
+  setTimeout(() => t.className = 'toast', 3000);
+}
+
+// ── Matrix Preview ───────────────────────────────────────────────────────────
+function rgbToHex(r, g, b) {
+  return '#' + [r,g,b].map(x => x.toString(16).padStart(2,'0')).join('');
+}
+
+function drawMatrix(game) {
+  if (!game) {
+    const canvas = document.getElementById('matrix-preview');
+    const ctx = canvas.getContext('2d');
+    canvas.width = W * PIXEL_SCALE;
+    canvas.height = H * PIXEL_SCALE;
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    return;
+  }
+
+  if (game.mode === 'weather') {
+    drawWeatherMatrix(game);
+    return;
+  }
+
+  const awayImg = new Image();
+  const homeImg = new Image();
+  let loaded = 0;
+
+  const onBothLoaded = () => {
+    loaded++;
+    if (loaded === 2) renderMatrix(game, awayImg, homeImg);
+  };
+
+  awayImg.onload = onBothLoaded;
+  homeImg.onload = onBothLoaded;
+  awayImg.onerror = onBothLoaded;
+  homeImg.onerror = onBothLoaded;
+
+  awayImg.src = `/logos/${game.sport}/${game.away.abbreviation}.png`;
+  homeImg.src = `/logos/${game.sport}/${game.home.abbreviation}.png`;
+}
+
+function drawWeatherMatrix(w) {
+  const canvas = document.getElementById('matrix-preview');
+  const ctx = canvas.getContext('2d');
+  const S = PIXEL_SCALE;
+  canvas.width = W * S;
+  canvas.height = H * S;
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+  // Use canvas text scaled to match the physical display's small fonts
+  function pxText(txt, x, y, color, size) {
+    ctx.font = `${size * S}px monospace`;
+    ctx.fillStyle = color;
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'top';
+    ctx.fillText(txt, x * S, y * S);
+  }
+  function pxTextCentered(txt, y, color, size) {
+    ctx.font = `${size * S}px monospace`;
+    ctx.fillStyle = color;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    ctx.fillText(txt, (W / 2) * S, y * S);
+  }
+
+  // Row 1 (y=5): temp + condition  — FONT_ABBR ≈ 7px tall
+  pxText(`${w.temp_f}F`, 34, 5, '#ffdc50', 6);
+  pxText(w.condition || '', 72, 5, '#ffffff', 6);
+
+  // Row 2 (y=15): wind / humidity / UV  — FONT ≈ 5px tall
+  let info = `W:${w.wind_mph}`;
+  if (w.wind_dir) info += ` ${w.wind_dir}`;
+  info += `  H:${w.humidity}%`;
+  if (w.uv_index && w.uv_index !== '0') info += `  UV:${w.uv_index}`;
+  pxTextCentered(info, 15, '#64b4ff', 5);
+
+  // Row 3 (y=22): time with seconds
+  pxTextCentered(w.time || '', 22, '#ffffff', 5);
+}
+
+function renderMatrix(game, awayImg, homeImg) {
+  const canvas = document.getElementById('matrix-preview');
+  const ctx = canvas.getContext('2d');
+  const S = PIXEL_SCALE;
+
+  canvas.width  = W * S;
+  canvas.height = H * S;
+
+  // Black background
+  ctx.fillStyle = '#000';
+  ctx.fillRect(0, 0, W * S, H * S);
+
+  const BAR_W = 20;
+  const CX = W / 2;
+  const LEFT_EDGE = BAR_W;
+  const RIGHT_EDGE = W - BAR_W;
+  const AWAY_CX = BAR_W + 22;
+  const HOME_CX = W - BAR_W - 22;
+
+  const awayColor = rgbToHex(...game.away.color);
+  const homeColor = rgbToHex(...game.home.color);
+
+  // Logos — 18×18, 1px side and top margin within 20px bar
+  const LOGO_W = 18;
+  ctx.imageSmoothingEnabled = false;
+  if (awayImg && awayImg.naturalWidth > 0)
+    ctx.drawImage(awayImg, 1 * S, 1 * S, LOGO_W * S, LOGO_W * S);
+  if (homeImg && homeImg.naturalWidth > 0)
+    ctx.drawImage(homeImg, (W - BAR_W + 1) * S, 1 * S, LOGO_W * S, LOGO_W * S);
+  ctx.imageSmoothingEnabled = true;
+
+  // Team abbreviations rows 20-26
+  ctx.fillStyle = '#fff';
+  ctx.font = `bold ${6 * S}px 'Share Tech Mono', monospace`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'top';
+  ctx.fillText(game.away.abbreviation, BAR_W/2 * S, 20 * S);
+  ctx.fillText(game.home.abbreviation, (W - BAR_W/2) * S, 20 * S);
+
+  // Team record / seed at row 27 (micro text in team color)
+  function drawMicroText(txt, x, y, color) {
+    ctx.fillStyle = color;
+    let cx = x;
+    for (const ch of txt) {
+      const rows = DIGITS[ch] || DIGITS['-'];
+      if (!rows) { cx += 4; continue; }
+      rows.forEach((row, ry) => {
+        [...row].forEach((bit, rx) => {
+          if (bit === '1') ctx.fillRect((cx + rx) * S, (y + ry) * S, S, S);
+        });
+      });
+      cx += 4;
+    }
+  }
+  function microWidth(txt) { return (txt.length - 1) * 4 + 3; }
+
+  for (const [team, barX, nudge] of [
+    [game.away, 0, 0],
+    [game.home, W - BAR_W, 1],
+  ]) {
+    const label = (game.is_playoff && team.seed) ? `#${team.seed}` : (team.record || '');
+    if (!label) continue;
+    const [r,g,b] = team.color;
+    const col = (r+g+b >= 60) ? rgbToHex(r,g,b) : '#505050';
+    const lw = microWidth(label);
+    const lx = barX + Math.floor((BAR_W - lw) / 2) + nudge;
+    drawMicroText(label, lx, 27, col);
+  }
+
+  // Header — period/status
+  let header = '';
+  let headerColor = '#ffc832';
+  if (game.is_halftime) { header = 'HALF'; headerColor = '#ff6a00'; }
+  else if (game.is_ot) { header = 'OT'; headerColor = '#b400ff'; }
+  else if (game.is_live) {
+    const labels = {1:'Q1',2:'Q2',3:'Q3',4:'Q4',5:'OT'};
+    header = labels[game.period] || `P${game.period}`;
+  }
+  else if (game.status === 'post') header = 'FINAL';
+  else header = 'PRE';
+
+  ctx.fillStyle = headerColor;
+  ctx.font = `bold ${6 * S}px 'Share Tech Mono', monospace`;
+  ctx.textAlign = 'center';
+  ctx.fillText(header, CX * S, 1 * S);
+
+  // Big scores
+  drawBigScore(ctx, String(game.away.score), AWAY_CX, 6, '#ffffff', S);
+  drawBigDash(ctx, CX - 3, 6, '#404060', S);
+  drawBigScore(ctx, String(game.home.score), HOME_CX, 6, '#ffffff', S);
+
+  // Clock
+  if (game.is_live && !game.is_halftime) {
+    ctx.fillStyle = '#ffc832';
+    ctx.font = `${5 * S}px 'Share Tech Mono', monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(game.clock, CX * S, 16 * S);
+  }
+
+  // Timeout dots (NFL only) — match renderer: groups centred on AWAY_CX / HOME_CX
+  if (game.sport === 'nfl' && game.is_live) {
+    const maxTo = 3, dotW = 3, spacing = 5;
+    const groupW = maxTo * spacing - (spacing - dotW); // 13
+    const axStart = AWAY_CX - Math.floor(groupW / 2);
+    for (let i = 0; i < maxTo; i++) {
+      const xi = axStart + i * spacing;
+      ctx.fillStyle = i < game.away.timeouts ? '#ff8c00' : '#2a2a3a';
+      ctx.fillRect(xi * S, 22 * S, dotW * S, 3 * S);
+    }
+    const hxStart = HOME_CX - Math.floor(groupW / 2);
+    for (let i = 0; i < maxTo; i++) {
+      const xi = hxStart + i * spacing;
+      ctx.fillStyle = i < game.home.timeouts ? '#ff8c00' : '#2a2a3a';
+      ctx.fillRect(xi * S, 22 * S, dotW * S, 3 * S);
+    }
+  }
+
+  // Fouls (NFL only) — match renderer positions
+  if (game.sport === 'nfl' && game.is_live) {
+    ctx.fillStyle = '#dc3232';
+    ctx.font = `${5 * S}px 'Share Tech Mono', monospace`;
+    ctx.textAlign = 'left';
+    ctx.fillText(String(game.away.fouls), (LEFT_EDGE - 2) * S, 21 * S);
+    ctx.textAlign = 'right';
+    ctx.fillText(String(game.home.fouls), (RIGHT_EDGE + 2) * S, 21 * S);
+  }
+
+  // Down & distance (NFL only)
+  if (game.sport === 'nfl' && game.is_live && game.down_distance) {
+    ctx.fillStyle = '#646464';
+    ctx.font = `${5 * S}px 'Share Tech Mono', monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(game.down_distance.replace('&', '-'), CX * S, 26 * S);
+  }
+
+  // Score differential
+  const diff = Math.abs(game.away.score - game.home.score);
+  if (diff > 0 && (game.is_live || game.status === 'post')) {
+    const diffStr = `+${diff}`;
+    const diffW = (diffStr.length - 1) * 4 + 3;
+    // Diff sits 1px outside the winning team's score, bottom-aligned (y=11, bottom at row 15)
+    if (game.away.score > game.home.score) {
+      const n = String(game.away.score).length;
+      const scoreW = n * 8 - 2;
+      const scoreLeft = AWAY_CX - Math.floor(scoreW / 2);
+      drawMicroText(diffStr, scoreLeft - diffW - 1, 11, '#00dc58');
+    } else {
+      const n = String(game.home.score).length;
+      const scoreW = n * 8 - 2;
+      const scoreRight = HOME_CX - Math.floor(scoreW / 2) + scoreW - 1;
+      drawMicroText(diffStr, scoreRight + 2, 11, '#00dc58');
+    }
+  }
+
+  // Series record (playoff)
+  if (game.is_playoff && game.series_summary && game.is_live) {
+    ctx.fillStyle = '#b400ff';
+    ctx.font = `${5 * S}px 'Share Tech Mono', monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText(game.series_summary, CX * S, 26 * S);
+  }
+
+  // Win probability bar — 1px after last lit pixel of each team's record label
+  if (game.is_live) {
+    function microW(lbl) { return lbl ? (lbl.length - 1) * 4 + 3 : 0; }
+    const awayLbl = (game.is_playoff && game.away.seed) ? `#${game.away.seed}` : (game.away.record || '');
+    const homeLbl = (game.is_playoff && game.home.seed) ? `#${game.home.seed}` : (game.home.record || '');
+    let barStart, barEnd;
+    if (awayLbl) {
+      const lw = microW(awayLbl);
+      const lx = Math.floor((BAR_W - lw) / 2);
+      barStart = lx + lw + 1;
+    } else {
+      barStart = LEFT_EDGE;
+    }
+    if (homeLbl) {
+      const lw = microW(homeLbl);
+      const lx = (W - BAR_W) + Math.floor((BAR_W - lw) / 2) + 1;
+      barEnd = lx - 2;
+    } else {
+      barEnd = RIGHT_EDGE - 1;
+    }
+    const barW = barEnd - barStart + 1;
+    if (barW > 0) {
+      const awayW = Math.round(barW * game.away_win_pct);
+      const homeW = barW - awayW;
+      if (awayW > 1) {
+        ctx.fillStyle = awayColor;
+        ctx.fillRect(barStart * S, 31 * S, (awayW - 1) * S, S);
+      }
+      ctx.fillStyle = '#000';
+      ctx.fillRect((barStart + awayW - 1) * S, 31 * S, S, S);
+      if (homeW > 0) {
+        ctx.fillStyle = homeColor;
+        ctx.fillRect((barStart + awayW) * S, 31 * S, homeW * S, S);
+      }
+    }
+  }
+
+  // Possession dot (only when no score diff)
+  if (diff === 0 && game.possession && game.is_live) {
+    ctx.fillStyle = '#ffffff';
+    if (game.possession === game.away.abbreviation) {
+      ctx.fillRect((AWAY_CX - 1) * S, 17 * S, 3 * S, 1 * S);
+    } else if (game.possession === game.home.abbreviation) {
+      ctx.fillRect((HOME_CX - 1) * S, 17 * S, 3 * S, 1 * S);
+    }
+  }
+
+  // LED dot overlay
+  ctx.globalAlpha = 0.08;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      ctx.fillStyle = '#000';
+      ctx.beginPath();
+      ctx.arc((x + 0.5) * S, (y + 0.5) * S, S * 0.22, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+const DIGITS = {
+  '0':["111","101","101","101","111"],
+  '1':["010","110","010","010","111"],
+  '2':["111","001","111","100","111"],
+  '3':["111","001","111","001","111"],
+  '4':["101","101","111","001","001"],
+  '5':["111","100","111","001","111"],
+  '6':["111","100","111","101","111"],
+  '7':["111","001","001","001","001"],
+  '8':["111","101","111","101","111"],
+  '9':["111","101","111","001","111"],
+  '-':["000","000","111","000","000"],
+};
+
+function drawBigDigit(ctx, ch, x, y, color, S) {
+  const rows = DIGITS[ch] || DIGITS['-'];
+  ctx.fillStyle = color;
+  rows.forEach((row, ry) => {
+    [...row].forEach((bit, rx) => {
+      if (bit === '1') ctx.fillRect((x + rx*2)*S, (y + ry*2)*S, 2*S, 2*S);
+    });
+  });
+}
+
+function drawBigScore(ctx, str, cx, y, color, S) {
+  const charW = 8;
+  const totalW = str.length * charW - 2;
+  let x = cx - totalW/2;
+  for (const ch of str) {
+    drawBigDigit(ctx, ch, x, y, color, S);
+    x += charW;
+  }
+}
+
+function drawBigDash(ctx, x, y, color, S) {
+  drawBigDigit(ctx, '-', x, y, color, S);
+}
+
+// ── Games ────────────────────────────────────────────────────────────────────
+async function loadGames() {
+  try {
+    const r = await fetch('/api/games');
+    games = await r.json();
+    renderGamesGrid();
+    if (games.length > 0) {
+      const idx = settings.pinned_game
+        ? games.findIndex(g => g.game_id === settings.pinned_game)
+        : 0;
+      drawMatrix(games[Math.max(0, idx)]);
+      const g = games[Math.max(0, idx)];
+      const label = `${g.away.abbreviation} ${g.away.score} — ${g.home.abbreviation} ${g.home.score} · ${g.status_detail}`;
+      document.getElementById('preview-label').textContent = label;
+    } else {
+      drawMatrix(null);
+      document.getElementById('preview-label').textContent = 'No games available';
+    }
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+function renderGamesGrid() {
+  const grid = document.getElementById('games-grid');
+  if (!games.length) {
+    grid.innerHTML = '<div style="color:#404060;font-family:var(--mono);font-size:13px">No games found</div>';
+    return;
+  }
+  grid.innerHTML = games.map((g, i) => {
+    const isPinned = settings.pinned_game === g.game_id;
+    const isLive = g.is_live;
+    const awayColor = rgbToHex(...g.away.color);
+    const homeColor = rgbToHex(...g.home.color);
+    let statusHtml = '';
+    if (isLive) {
+      const labels = {1:'Q1',2:'Q2',3:'Q3',4:'Q4',5:'OT'};
+      const period = g.is_halftime ? 'HALF' : (labels[g.period] || `P${g.period}`);
+      statusHtml = `<span class="live-badge">● LIVE</span> ${period} ${g.clock}`;
+    } else if (g.status === 'post') {
+      statusHtml = `<span class="final-badge">FINAL</span>`;
+    } else {
+      statusHtml = `<span class="pre-badge">${g.status_detail}</span>`;
+    }
+    return `
+      <div class="game-card ${isLive?'live':''} ${isPinned?'pinned':''}" onclick="pinGame('${g.game_id}', ${i})">
+        <button class="pin-btn ${isPinned?'active':''}" onclick="event.stopPropagation();pinGame('${g.game_id}', ${i})">
+          ${isPinned ? 'PINNED' : 'PIN'}
+        </button>
+        <div class="game-teams">
+          <div class="team-block">
+            <div class="team-abbr" style="color:${awayColor}">${g.away.abbreviation}</div>
+            <div class="team-score">${g.away.score}</div>
+          </div>
+          <div class="game-divider">—</div>
+          <div class="team-block">
+            <div class="team-abbr" style="color:${homeColor}">${g.home.abbreviation}</div>
+            <div class="team-score">${g.home.score}</div>
+          </div>
+        </div>
+        <div class="game-status">${statusHtml} · ${g.sport.toUpperCase()}</div>
+      </div>`;
+  }).join('');
+}
+
+function pinGame(gameId, idx) {
+  if (settings.pinned_game === gameId) {
+    settings.pinned_game = null;
+  } else {
+    settings.pinned_game = gameId;
+  }
+  drawMatrix(games[idx]);
+  renderGamesGrid();
+  saveSettings();
+}
+
+// ── Settings ─────────────────────────────────────────────────────────────────
+async function loadSettings() {
+  try {
+    const r = await fetch('/api/settings');
+    settings = await r.json();
+    document.getElementById('ctrl-sport').value = settings.sport || 'auto';
+    document.getElementById('ctrl-dwell').value = settings.scroll_dwell || 10;
+    document.getElementById('ctrl-refresh').value = settings.refresh_rate || 15;
+    document.getElementById('ctrl-brightness').value = settings.brightness || 60;
+    document.getElementById('dwell-val').textContent = settings.scroll_dwell || 10;
+    document.getElementById('refresh-val').textContent = settings.refresh_rate || 15;
+    document.getElementById('brightness-val').textContent = settings.brightness || 60;
+    scrollEnabled = settings.scroll !== false;
+    updateScrollToggle();
+    continuousScrollEnabled = settings.continuous_scroll === true;
+    updateContinuousScrollToggle();
+  } catch(e) { console.error(e); }
+}
+
+function settingChanged() {
+  // Just update display values — apply on button press
+}
+
+function updateScrollToggle() {
+  const track = document.getElementById('scroll-toggle');
+  const label = document.getElementById('scroll-label');
+  track.className = 'toggle-track' + (scrollEnabled ? ' on' : '');
+  label.textContent = scrollEnabled ? 'Enabled' : 'Disabled';
+}
+
+function toggleScroll() {
+  scrollEnabled = !scrollEnabled;
+  updateScrollToggle();
+}
+
+function updateContinuousScrollToggle() {
+  const track = document.getElementById('contscroll-toggle');
+  const label = document.getElementById('contscroll-label');
+  track.className = 'toggle-track' + (continuousScrollEnabled ? ' on' : '');
+  label.textContent = continuousScrollEnabled ? 'Enabled' : 'Disabled';
+}
+
+function toggleContinuousScroll() {
+  continuousScrollEnabled = !continuousScrollEnabled;
+  updateContinuousScrollToggle();
+}
+
+async function applySettings() {
+  const s = {
+    sport: document.getElementById('ctrl-sport').value,
+    scroll: scrollEnabled,
+    scroll_dwell: parseInt(document.getElementById('ctrl-dwell').value),
+    refresh_rate: parseInt(document.getElementById('ctrl-refresh').value),
+    brightness: parseInt(document.getElementById('ctrl-brightness').value),
+    pinned_game: settings.pinned_game || null,
+    continuous_scroll: continuousScrollEnabled,
+  };
+  try {
+    await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(s)});
+    settings = s;
+    toast('Settings applied — restarting service...');
+  } catch(e) { toast('Failed to apply settings', true); }
+}
+
+async function saveSettings() {
+  try {
+    await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(settings)});
+  } catch(e) {}
+}
+
+// ── System ───────────────────────────────────────────────────────────────────
+async function loadSysInfo() {
+  try {
+    const r = await fetch('/api/sysinfo');
+    const d = await r.json();
+    const dot = document.getElementById('service-dot');
+    const status = document.getElementById('service-status');
+    dot.className = 'status-dot' + (d.service === 'active' ? '' : ' off');
+    status.textContent = d.service;
+    document.getElementById('header-ip').textContent = d.ip;
+    document.getElementById('sysinfo-grid').innerHTML = [
+      ['CPU Temp', d.temp],
+      ['CPU', d.cpu],
+      ['Memory', d.memory],
+      ['Uptime', d.uptime],
+      ['IP', d.ip],
+      ['Service', d.service],
+    ].map(([k,v]) => `
+      <div class="sysinfo-card">
+        <div class="sysinfo-val">${v}</div>
+        <div class="sysinfo-key">${k}</div>
+      </div>`).join('');
+  } catch(e) { console.error(e); }
+}
+
+async function forceRefresh() {
+  try {
+    const r = await fetch('/api/refresh', {method:'POST'});
+    const d = await r.json();
+    toast(`Refreshed — ${d.games} games found`);
+    loadGames();
+  } catch(e) { toast('Refresh failed', true); }
+}
+
+async function restartService() {
+  try {
+    await fetch('/api/restart', {method:'POST'});
+    toast('Service restarting...');
+    setTimeout(loadSysInfo, 3000);
+  } catch(e) { toast('Restart failed', true); }
+}
+
+// ── API Data ──────────────────────────────────────────────────────────────────
+async function loadApiData() {
+  const container = document.getElementById('api-data-container');
+  container.innerHTML = '<div style="color:#606080;font-family:var(--mono);font-size:13px">Fetching...</div>';
+  try {
+    const r = await fetch('/api/rawdata');
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const d = await r.json();
+    let html = '';
+    for (const [league, data] of Object.entries(d)) {
+      if (!data || !data.events || !data.events.length) continue;
+      html += `<div class="api-section">
+        <div class="api-league-header">${league.toUpperCase()} — ${data.events.length} event${data.events.length !== 1 ? 's' : ''}</div>`;
+      for (const event of data.events) {
+        const status = event.status?.type?.shortDetail || '';
+        html += `<div class="api-event">
+          <div class="api-event-header" onclick="toggleApi(this)">
+            <span style="color:var(--text);flex:1">${event.name || event.id}</span>
+            <span style="color:var(--accent);font-size:12px;margin:0 16px">${status}</span>
+            <span class="chevron">▼</span>
+          </div>
+          <div class="api-event-body">
+            <pre>${JSON.stringify(event, null, 2)}</pre>
+          </div>
+        </div>`;
+      }
+      html += '</div>';
+    }
+    container.innerHTML = html || '<div style="color:#404060;font-family:var(--mono)">No events in API response</div>';
+  } catch(e) {
+    container.innerHTML = `<div style="color:var(--red);font-family:var(--mono);font-size:13px">Error: ${e.message}</div>`;
+  }
+}
+
+function toggleApi(header) {
+  const body = header.nextElementSibling;
+  const chevron = header.querySelector('.chevron');
+  body.classList.toggle('open');
+  chevron.classList.toggle('open');
+}
+
+// ── Simulator ────────────────────────────────────────────────────────────────
+// ── Simulator team lists ──────────────────────────────────────────────────────
+const SIM_TEAMS = {
+  nba: [
+    ['ATL','Atlanta Hawks'],['BKN','Brooklyn Nets'],['BOS','Boston Celtics'],
+    ['CHA','Charlotte Hornets'],['CHI','Chicago Bulls'],['CLE','Cleveland Cavaliers'],
+    ['DAL','Dallas Mavericks'],['DEN','Denver Nuggets'],['DET','Detroit Pistons'],
+    ['GS','Golden State Warriors'],['HOU','Houston Rockets'],['IND','Indiana Pacers'],
+    ['LAC','LA Clippers'],['LAL','Los Angeles Lakers'],['MEM','Memphis Grizzlies'],
+    ['MIA','Miami Heat'],['MIL','Milwaukee Bucks'],['MIN','Minnesota Timberwolves'],
+    ['NO','New Orleans Pelicans'],['NY','New York Knicks'],['OKC','Oklahoma City Thunder'],
+    ['ORL','Orlando Magic'],['PHI','Philadelphia 76ers'],['PHX','Phoenix Suns'],
+    ['POR','Portland Trail Blazers'],['SA','San Antonio Spurs'],['SAC','Sacramento Kings'],
+    ['TOR','Toronto Raptors'],['UTAH','Utah Jazz'],['WSH','Washington Wizards'],
+  ],
+  nfl: [
+    ['ARI','Arizona Cardinals'],['ATL','Atlanta Falcons'],['BAL','Baltimore Ravens'],
+    ['BUF','Buffalo Bills'],['CAR','Carolina Panthers'],['CHI','Chicago Bears'],
+    ['CIN','Cincinnati Bengals'],['CLE','Cleveland Browns'],['DAL','Dallas Cowboys'],
+    ['DEN','Denver Broncos'],['DET','Detroit Lions'],['GB','Green Bay Packers'],
+    ['HOU','Houston Texans'],['IND','Indianapolis Colts'],['JAX','Jacksonville Jaguars'],
+    ['KC','Kansas City Chiefs'],['LAC','Los Angeles Chargers'],['LAR','Los Angeles Rams'],
+    ['LV','Las Vegas Raiders'],['MIA','Miami Dolphins'],['MIN','Minnesota Vikings'],
+    ['NE','New England Patriots'],['NO','New Orleans Saints'],['NYG','New York Giants'],
+    ['NYJ','New York Jets'],['PHI','Philadelphia Eagles'],['PIT','Pittsburgh Steelers'],
+    ['SEA','Seattle Seahawks'],['SF','San Francisco 49ers'],['TB','Tampa Bay Buccaneers'],
+    ['TEN','Tennessee Titans'],['WAS','Washington Commanders'],
+  ],
+};
+
+function updateSimTeams(awayDefault, homeDefault) {
+  const sport = document.getElementById('sim-sport').value;
+  const teams = SIM_TEAMS[sport] || [];
+  const awayDef = awayDefault || teams[1]?.[0] || teams[0]?.[0];
+  const homeDef = homeDefault || teams[0]?.[0];
+  ['sim-away-abbr', 'sim-home-abbr'].forEach((id, i) => {
+    const sel = document.getElementById(id);
+    const def = i === 0 ? awayDef : homeDef;
+    sel.innerHTML = teams.map(([abbr, name]) =>
+      `<option value="${abbr}"${abbr === def ? ' selected' : ''}>${abbr} — ${name}</option>`
+    ).join('');
+  });
+  document.getElementById('sim-nfl-fields').style.display = sport === 'nfl' ? 'block' : 'none';
+}
+
+let simAwayWins = 0, simHomeWins = 0;
+
+function toggleSimPlayoff() {
+  const on = document.getElementById('sim-playoff').checked;
+  document.getElementById('sim-series-section').style.display = on ? 'block' : 'none';
+}
+
+function adjustWins(side, delta) {
+  if (side === 'away') simAwayWins = Math.max(0, Math.min(4, simAwayWins + delta));
+  else                 simHomeWins = Math.max(0, Math.min(4, simHomeWins + delta));
+  document.getElementById('sim-away-wins-val').textContent = simAwayWins;
+  document.getElementById('sim-home-wins-val').textContent = simHomeWins;
+  updateSeriesPreview();
+}
+
+function buildSeriesSummary() {
+  const awayAbbr = document.getElementById('sim-away-abbr').value;
+  const homeAbbr = document.getElementById('sim-home-abbr').value;
+  if (simAwayWins === simHomeWins) return `Tied ${simAwayWins}-${simHomeWins}`;
+  if (simAwayWins > simHomeWins)   return `${awayAbbr} ${simAwayWins}-${simHomeWins}`;
+  return `${homeAbbr} ${simHomeWins}-${simAwayWins}`;
+}
+
+function buildGameLabel() {
+  const game = simAwayWins + simHomeWins + 1;
+  return game <= 7 ? `Game ${game}` : 'Game 7';
+}
+
+function updateSeriesPreview() {
+  const el = document.getElementById('sim-series-preview');
+  if (el) el.textContent = `${buildSeriesSummary()} · ${buildGameLabel()}`;
+}
+
+async function runSim() {
+  const awayPct = parseInt(document.getElementById('sim-away-pct').value) / 100;
+  const data = {
+    sport: document.getElementById('sim-sport').value,
+    away_abbr: document.getElementById('sim-away-abbr').value,
+    home_abbr: document.getElementById('sim-home-abbr').value,
+    away_score: parseInt(document.getElementById('sim-away-score').value),
+    home_score: parseInt(document.getElementById('sim-home-score').value),
+    away_record: document.getElementById('sim-away-record').value.trim(),
+    home_record: document.getElementById('sim-home-record').value.trim(),
+    away_seed: parseInt(document.getElementById('sim-away-seed').value) || 0,
+    home_seed: parseInt(document.getElementById('sim-home-seed').value) || 0,
+    period: parseInt(document.getElementById('sim-period').value),
+    clock: document.getElementById('sim-clock').value,
+    is_halftime: document.getElementById('sim-halftime').checked,
+    is_ot: document.getElementById('sim-ot').checked,
+    is_playoff: document.getElementById('sim-playoff').checked,
+    series_summary: document.getElementById('sim-playoff').checked ? buildSeriesSummary() : '',
+    game_label: document.getElementById('sim-playoff').checked ? buildGameLabel() : '',
+    away_win_pct: awayPct,
+    down_distance: document.getElementById('sim-sport').value === 'nfl'
+      ? (document.getElementById('sim-down-distance').value.trim() || null) : null,
+    possession: document.getElementById('sim-sport').value === 'nfl'
+      ? (document.getElementById('sim-possession').value.trim().toUpperCase() || null) : null,
+  };
+  try {
+    await fetch('/api/simulate', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+    toast('Simulation injected — service restarting...');
+    setTimeout(loadGames, 3000);
+  } catch(e) { toast('Simulation failed', true); }
+}
+
+async function clearSim() {
+  try {
+    await fetch('/api/simulate/clear', {method:'POST'});
+    toast('Simulation cleared — resuming live data...');
+    setTimeout(loadGames, 3000);
+  } catch(e) { toast('Failed to clear', true); }
+}
+
+async function flashScore(team) {
+  try {
+    await fetch('/api/simulate/flash', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({team})});
+    toast(`Flashing ${team} score...`);
+  } catch(e) { toast('Flash failed', true); }
+}
+
+// ── Logo Parade ──────────────────────────────────────────────────────────────
+let paradeStatusInterval = null;
+
+async function loadParadeStatus() {
+  try {
+    const r = await fetch('/api/parade/status');
+    const d = await r.json();
+    updateParadeUI(d.running);
+  } catch(e) {}
+}
+
+function updateParadeUI(running) {
+  const val = document.getElementById('parade-status-val');
+  const startBtn = document.getElementById('parade-start-btn');
+  const stopBtn = document.getElementById('parade-stop-btn');
+  if (running) {
+    val.textContent = '● RUNNING';
+    val.style.color = 'var(--green)';
+    startBtn.disabled = true;
+    stopBtn.disabled = false;
+  } else {
+    val.textContent = 'STOPPED';
+    val.style.color = '#606080';
+    startBtn.disabled = false;
+    stopBtn.disabled = true;
+  }
+}
+
+async function startParade() {
+  const sport = document.getElementById('parade-sport').value;
+  document.getElementById('parade-status-val').textContent = 'STARTING...';
+  document.getElementById('parade-status-val').style.color = 'var(--yellow)';
+  document.getElementById('parade-start-btn').disabled = true;
+  try {
+    await fetch('/api/parade/start', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify({sport})});
+    toast(`Parade started — ${sport.toUpperCase()}`);
+    setTimeout(loadParadeStatus, 1500);
+  } catch(e) {
+    toast('Failed to start parade', true);
+    loadParadeStatus();
+  }
+}
+
+async function stopParade() {
+  document.getElementById('parade-stop-btn').disabled = true;
+  try {
+    await fetch('/api/parade/stop', {method:'POST'});
+    toast('Parade stopped — resuming scores');
+    setTimeout(loadParadeStatus, 500);
+  } catch(e) {
+    toast('Failed to stop parade', true);
+    loadParadeStatus();
+  }
+}
+
+// ── WiFi ─────────────────────────────────────────────────────────────────────
+let selectedSsid = '';
+
+async function loadWifiStatus() {
+  try {
+    const r = await fetch('/api/wifi/status');
+    const d = await r.json();
+    const cur = document.getElementById('wifi-current');
+    const ip  = document.getElementById('wifi-ip');
+    const forget = document.getElementById('wifi-forget-section');
+    if (d.connected && d.ssid) {
+      cur.textContent = '● ' + d.ssid;
+      cur.style.color = 'var(--green)';
+      ip.textContent  = d.ip || '';
+      forget.style.display = 'block';
+    } else {
+      cur.textContent = 'Not connected';
+      cur.style.color = 'var(--red)';
+      ip.textContent  = '';
+      forget.style.display = 'none';
+    }
+  } catch(e) { console.error(e); }
+}
+
+async function scanWifi() {
+  const container = document.getElementById('wifi-networks');
+  container.innerHTML = '<span style="color:#606080;font-family:var(--mono);font-size:13px">Scanning...</span>';
+  try {
+    const r = await fetch('/api/wifi/networks');
+    const nets = await r.json();
+    if (nets.error) { container.innerHTML = `<span style="color:var(--red)">${nets.error}</span>`; return; }
+    if (!nets.length) { container.innerHTML = '<span style="color:#606080">No networks found</span>'; return; }
+    container.innerHTML = nets.map(n => {
+      const bars = n.signal >= 75 ? '▂▄▆█' : n.signal >= 50 ? '▂▄▆░' : n.signal >= 25 ? '▂▄░░' : '▂░░░';
+      const lock  = n.secured ? ' 🔒' : '';
+      return `<div onclick="selectNetwork('${n.ssid.replace(/'/g,"\\'")}', ${n.secured})"
+                   style="padding:10px 14px;border:1px solid var(--border);border-radius:6px;margin-bottom:6px;cursor:pointer;
+                          display:flex;align-items:center;justify-content:space-between;transition:border-color 0.2s"
+                   onmouseover="this.style.borderColor='var(--accent)'" onmouseout="this.style.borderColor='var(--border)'">
+                <span style="font-family:var(--mono);font-size:13px">${n.ssid}${lock}</span>
+                <span style="font-family:var(--mono);font-size:12px;color:#606080">${bars} ${n.signal}%</span>
+              </div>`;
+    }).join('');
+  } catch(e) { container.innerHTML = '<span style="color:var(--red)">Scan failed</span>'; }
+}
+
+function selectNetwork(ssid, secured) {
+  selectedSsid = ssid;
+  document.getElementById('wifi-connect-ssid').textContent = ssid;
+  document.getElementById('wifi-password').value = '';
+  const pwGroup = document.getElementById('wifi-password').parentElement;
+  pwGroup.style.display = secured ? 'block' : 'none';
+  document.getElementById('wifi-connect-form').style.display = 'block';
+  document.getElementById('wifi-connect-form').scrollIntoView({behavior:'smooth'});
+}
+
+async function connectWifi() {
+  const password = document.getElementById('wifi-password').value;
+  const btn = document.querySelector('#wifi-connect-form .btn-primary');
+  btn.disabled = true;
+  btn.textContent = 'Connecting...';
+  try {
+    const r = await fetch('/api/wifi/connect', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ssid: selectedSsid, password})
+    });
+    const d = await r.json();
+    if (d.ok) {
+      toast('Connected to ' + selectedSsid);
+      document.getElementById('wifi-connect-form').style.display = 'none';
+      loadWifiStatus();
+    } else {
+      toast(d.error || d.msg || 'Connection failed', true);
+    }
+  } catch(e) { toast('Connection request failed', true); }
+  btn.disabled = false;
+  btn.textContent = 'Connect';
+}
+
+async function forgetWifi() {
+  const ssid = document.getElementById('wifi-current').textContent.replace(/^● /, '');
+  if (!ssid || ssid === 'Not connected') return;
+  if (!confirm(`Forget "${ssid}"? The device will reboot into WiFi setup mode on next restart.`)) return;
+  try {
+    const r = await fetch('/api/wifi/forget', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ssid})
+    });
+    const d = await r.json();
+    toast(d.ok ? `Forgot ${ssid}` : (d.error || 'Failed'), !d.ok);
+    if (d.ok) loadWifiStatus();
+  } catch(e) { toast('Request failed', true); }
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+async function init() {
+  updateSimTeams('BOS', 'MIA');  // populate simulator dropdowns with NBA defaults
+  await loadSettings();
+  await loadGames();
+  await loadSysInfo();
+  // Auto-refresh every 15s
+  // Poll current game for live preview every 1 second
+  setInterval(async () => {
+      try {
+          const r = await fetch('/api/current');
+          const game = await r.json();
+          if (game) {
+              drawMatrix(game);
+              let label;
+              if (game.mode === 'weather') {
+                  label = `${game.zip_code} · ${game.condition} · ${game.temp_f}°F · ${game.time}`;
+              } else {
+                  label = `${game.away.abbreviation} ${game.away.score} — ${game.home.abbreviation} ${game.home.score} · ${game.status_detail}`;
+              }
+              document.getElementById('preview-label').textContent = label;
+          }
+      } catch(e) {}
+  }, 1000);
+
+  // Refresh games list every 15s
+  setInterval(loadGames, 15000);
+  setInterval(loadSysInfo, 30000);
+}
+
+init();
+</script>
+
+<!-- Monaco Editor -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs/loader.min.js"></script>
+<script>
+// ── Code Editor ───────────────────────────────────────────────────────────────
+let monacoEditor = null;
+let codeCurrentPath = null;
+let codeOriginal = '';
+
+const EXT_LANG = {
+  '.py':'python', '.html':'html', '.css':'css', '.js':'javascript',
+  '.json':'json', '.sh':'shell', '.conf':'ini', '.md':'markdown',
+  '.txt':'plaintext', '.service':'ini', '.bdf':'plaintext', '.pil':'plaintext',
+};
+
+function codeExtLang(filename) {
+  const m = filename.match(/(\.[^.]+)$/);
+  return m ? (EXT_LANG[m[1]] || 'plaintext') : 'plaintext';
+}
+
+function initMonaco() {
+  if (monacoEditor) return;
+  require.config({ paths: { vs: 'https://cdnjs.cloudflare.com/ajax/libs/monaco-editor/0.44.0/min/vs' } });
+  require(['vs/editor/editor.main'], () => {
+    monaco.editor.defineTheme('scoratron', {
+      base: 'vs-dark',
+      inherit: true,
+      rules: [],
+      colors: {
+        'editor.background': '#12121a',
+        'editor.lineHighlightBackground': '#1a1a26',
+        'editorLineNumber.foreground': '#404060',
+        'editorGutter.background': '#12121a',
+      }
+    });
+    monacoEditor = monaco.editor.create(document.getElementById('monaco-container'), {
+      value: '',
+      language: 'plaintext',
+      theme: 'scoratron',
+      fontSize: 13,
+      fontFamily: "'Share Tech Mono', monospace",
+      minimap: { enabled: false },
+      scrollBeyondLastLine: false,
+      automaticLayout: true,
+      lineNumbers: 'on',
+      renderLineHighlight: 'line',
+      wordWrap: 'off',
+    });
+    monacoEditor.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.KeyS, saveCodeFile);
+    monacoEditor.onDidChangeModelContent(() => {
+      const dirty = monacoEditor.getValue() !== codeOriginal;
+      document.getElementById('code-save-status').textContent = dirty ? '● unsaved' : '';
+      document.getElementById('code-save-status').style.color = dirty ? 'var(--accent2)' : '#404060';
+    });
+  });
+}
+
+async function loadCodeFiles() {
+  initMonaco();
+  try {
+    const r = await fetch('/api/code/files');
+    const tree = await r.json();
+    document.getElementById('code-tree').innerHTML = renderTree(tree, 0);
+  } catch(e) {
+    document.getElementById('code-tree').innerHTML =
+      '<div style="padding:16px;font-family:var(--mono);font-size:12px;color:var(--red)">Failed to load files</div>';
+  }
+}
+
+function renderTree(nodes, depth) {
+  return nodes.map(n => {
+    if (n.type === 'dir') {
+      const children = renderTree(n.children, depth + 1);
+      return `<div class="tree-dir" id="dir-${btoa(n.path).replace(/=/g,'')}">
+        <div class="tree-item" onclick="toggleDir(this)">
+          <span class="dir-arrow">▶</span>
+          <span style="color:#6060a0">📁</span>
+          <span>${n.name}</span>
+        </div>
+        <div class="tree-children" style="display:none">${children}</div>
+      </div>`;
+    } else {
+      const icon = n.name.endsWith('.py') ? '🐍' : n.name.endsWith('.html') ? '🌐' :
+                   n.name.endsWith('.sh') ? '⚙' : '📄';
+      return `<div class="tree-item" id="file-${btoa(n.path).replace(/=/g,'')}"
+                   onclick="openCodeFile('${n.path.replace(/'/g,"\\'")}', this)">
+        <span style="color:#404060">${icon}</span>
+        <span>${n.name}</span>
+      </div>`;
+    }
+  }).join('');
+}
+
+function toggleDir(el) {
+  const dir = el.parentElement;
+  const children = el.nextElementSibling;
+  const open = children.style.display !== 'none';
+  children.style.display = open ? 'none' : 'block';
+  dir.classList.toggle('open', !open);
+}
+
+async function openCodeFile(path, el) {
+  document.querySelectorAll('#code-tree .tree-item').forEach(i => i.classList.remove('active'));
+  if (el) el.classList.add('active');
+  try {
+    const r = await fetch('/api/code/read?path=' + encodeURIComponent(path));
+    const d = await r.json();
+    if (d.error) { toast(d.error, true); return; }
+    codeCurrentPath = path;
+    codeOriginal = d.content;
+    document.getElementById('code-filename').textContent = path;
+    document.getElementById('code-filename').style.color = 'var(--accent)';
+    document.getElementById('code-save-btn').disabled = false;
+    document.getElementById('code-save-status').textContent = '';
+    if (monacoEditor) {
+      const lang = codeExtLang(path);
+      monaco.editor.setModelLanguage(monacoEditor.getModel(), lang);
+      monacoEditor.setValue(d.content);
+      monacoEditor.setScrollPosition({ scrollTop: 0 });
+    }
+  } catch(e) { toast('Failed to open file', true); }
+}
+
+// ── Weather ──────────────────────────────────────────────────────────────────
+async function loadWeatherPage() {
+  const r = await fetch('/api/settings');
+  const s = await r.json();
+  document.getElementById('weather-zip').value = s.zip_code || '';
+  document.getElementById('weather-force').checked = !!s.force_weather;
+  styleWeatherCheckbox();
+  if (s.zip_code) loadWeatherPreview();
+}
+
+function styleWeatherCheckbox() {
+  const cb = document.getElementById('weather-force');
+  cb.style.background = cb.checked ? 'var(--accent)' : 'var(--surface)';
+  cb.style.borderColor = cb.checked ? 'var(--accent)' : 'var(--border)';
+}
+
+async function saveWeatherSettings() {
+  const zip   = document.getElementById('weather-zip').value.trim();
+  const force = document.getElementById('weather-force').checked;
+  styleWeatherCheckbox();
+  await fetch('/api/settings', {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({ zip_code: zip, force_weather: force }),
+  });
+  toast('Weather settings saved');
+  if (zip) loadWeatherPreview();
+}
+
+async function loadWeatherPreview() {
+  const el = document.getElementById('weather-preview');
+  el.innerHTML = '<div style="color:#606080;font-family:var(--mono);font-size:13px">Loading...</div>';
+  try {
+    const r = await fetch('/api/weather');
+    if (!r.ok) {
+      const d = await r.json();
+      el.innerHTML = `<div style="color:var(--red);font-family:var(--mono);font-size:13px">${d.error || 'Error fetching weather'}</div>`;
+      return;
+    }
+    const w = await r.json();
+    el.innerHTML = `
+      <div style="display:flex;align-items:baseline;gap:10px">
+        <span style="font-size:40px;font-weight:700;color:var(--yellow);font-family:var(--display);line-height:1">${w.temp_f}°F</span>
+        ${w.feels_like_f !== w.temp_f ? `<span style="font-size:14px;color:#808090;font-family:var(--mono)">feels ${w.feels_like_f}°F</span>` : ''}
+      </div>
+      <div style="font-size:20px;color:var(--text);margin:4px 0 12px">${w.condition}</div>
+      <div style="display:flex;gap:20px;font-family:var(--mono);font-size:13px;color:#909090;flex-wrap:wrap">
+        <span>Wind: ${w.wind_mph} mph ${w.wind_dir}</span>
+        <span>Humidity: ${w.humidity}%</span>
+        <span>UV: ${w.uv_index}</span>
+        <span>${w.city || w.zip_code}</span>
+      </div>`;
+  } catch(e) {
+    el.innerHTML = `<div style="color:var(--red);font-family:var(--mono);font-size:13px">Failed to reach weather API</div>`;
+  }
+}
+
+async function saveCodeFile() {
+  if (!codeCurrentPath || !monacoEditor) return;
+  const content = monacoEditor.getValue();
+  try {
+    const r = await fetch('/api/code/write', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ path: codeCurrentPath, content }),
+    });
+    const d = await r.json();
+    if (d.ok) {
+      codeOriginal = content;
+      document.getElementById('code-save-status').textContent = '';
+      toast('Saved — ' + codeCurrentPath);
+    } else {
+      toast(d.error || 'Save failed', true);
+    }
+  } catch(e) { toast('Save failed', true); }
+}
+</script>
+</body>
+</html>
