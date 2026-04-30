@@ -532,8 +532,9 @@ class ScoreBugRenderer:
                 score_right = HOME_CX - score_w // 2 + score_w - 1
                 diff_x = score_right + 2
             draw_micro_text(draw, diff_str, diff_x, diff_y, (0, 220, 80))
-        elif game.possession and game.is_live:
-            # No score difference yet — fall back to possession dot
+
+        if game.possession and game.is_live and game.sport == "nfl":
+            # NFL only — possession dot below score of the team with the ball
             if game.possession == game.away.abbreviation:
                 draw.rectangle([AWAY_CX - 1, 17, AWAY_CX + 1, 17], fill=COLOR_WHITE)
             elif game.possession == game.home.abbreviation:

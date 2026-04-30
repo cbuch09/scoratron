@@ -340,6 +340,8 @@ def api_simulate():
         'game_label': data.get('game_label', ''),
         'away_win_pct': away_win_pct,
         'home_win_pct': 1 - away_win_pct,
+        'possession': data.get('possession', None),
+        'down_distance': data.get('down_distance', None),
     }
     with open('/tmp/scoratron_sim.json', 'w') as f:
         json.dump(sim, f)

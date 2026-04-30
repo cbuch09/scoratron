@@ -99,21 +99,21 @@ class ScoreFetcher:
             if non_stale:
                 return non_stale
 
-        # No live or recent finished — show upcoming games within 60 minutes
+        # No live or recent finished — show all upcoming games once the first
+        # game of the day is within 60 minutes
         upcoming = [g for g in games if g.status == "pre"]
         if upcoming:
             now_utc = datetime.now(timezone.utc)
             cutoff  = now_utc + timedelta(minutes=60)
-            def starts_soon(g):
+            def start_dt(g):
                 if not g.start_time_utc:
-                    return True
+                    return now_utc
                 try:
-                    t = datetime.fromisoformat(g.start_time_utc.replace("Z", "+00:00"))
-                    return t <= cutoff
+                    return datetime.fromisoformat(g.start_time_utc.replace("Z", "+00:00"))
                 except Exception:
-                    return True
-            upcoming = [g for g in upcoming if starts_soon(g)]
-            if upcoming:
+                    return now_utc
+            earliest = min(start_dt(g) for g in upcoming)
+            if earliest <= cutoff:
                 return upcoming
 
         return []
@@ -225,14 +225,6 @@ class ScoreFetcher:
                 if down:
                     down_str = {1:"1st",2:"2nd",3:"3rd",4:"4th"}.get(down, str(down))
                     down_distance = f"{down_str}-{distance}"
-            elif sport == "nba" and is_live:
-                last_play = situation.get("lastPlay", {})
-                poss_team_id = last_play.get("team", {}).get("id")
-                if poss_team_id:
-                    for c in competitors:
-                        if str(c.get("team", {}).get("id")) == str(poss_team_id):
-                            possession = c.get("team", {}).get("abbreviation")
-                            break
 
             # Playoff detection
             season = event.get("season", {})

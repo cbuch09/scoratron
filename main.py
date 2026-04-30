@@ -73,6 +73,24 @@ def write_weather_preview(weather):
     except Exception as e:
         print(f'[preview] weather write error: {e}')
 
+LINGER_FILE = '/tmp/scoratron_linger.json'
+
+def load_linger():
+    try:
+        if os.path.exists(LINGER_FILE):
+            with open(LINGER_FILE) as f:
+                return {k: float(v) for k, v in json.load(f).items()}
+    except Exception:
+        pass
+    return {}
+
+def save_linger(linger_until):
+    try:
+        with open(LINGER_FILE, 'w') as f:
+            json.dump(linger_until, f)
+    except Exception as e:
+        print(f'[linger] save error: {e}')
+
 def load_webui_settings():
     path = '/home/admin/scoratron/settings.json'
     try:
@@ -280,7 +298,8 @@ def main():
     last_scroll_time = time.time()
     games = []
     last_scores = {}
-    linger_until = {}
+    linger_until = load_linger()
+    is_first_fetch = True
     scroll_offset = 0
     scroll_strip  = None
     LINGER_SECONDS = 30 * 60
@@ -340,21 +359,33 @@ def main():
                 if g:
                     new_games.extend(g)
 
-            # Track when games go final and set linger timer
+            # Track when games go final and set linger timer.
+            # On the first fetch after startup, games already in "post" state
+            # are treated as immediately expired so stale scores don't reappear.
             for game in new_games:
                 if game.status == "post" and game.game_id not in linger_until:
-                    linger_until[game.game_id] = now + LINGER_SECONDS
-                    print(f"[linger] {game.away.abbreviation} vs {game.home.abbreviation} final — showing for 30min")
+                    if is_first_fetch:
+                        linger_until[game.game_id] = 0  # already finished — suppress
+                    else:
+                        linger_until[game.game_id] = now + LINGER_SECONDS
+                        print(f"[linger] {game.away.abbreviation} vs {game.home.abbreviation} final — showing for 30min")
+            is_first_fetch = False
 
-            # Add lingering finals that dropped off the API
+            # Drop finished games whose linger window has closed — prevents ESPN
+            # from re-adding them indefinitely after the 30-min window expires
+            new_games = [g for g in new_games
+                         if g.status != "post" or now < linger_until.get(g.game_id, 0)]
+
+            # Add lingering finals that dropped off the API before their window closed
             current_ids = {g.game_id for g in new_games}
             for game in games:
                 if game.status == "post" and game.game_id not in current_ids:
                     if game.game_id in linger_until and now < linger_until[game.game_id]:
                         new_games.append(game)
 
-            # Remove expired lingering finals
-            linger_until = {gid: t for gid, t in linger_until.items() if now < t}
+            # Prune entries older than 24h to prevent unbounded growth
+            linger_until = {gid: t for gid, t in linger_until.items() if now - t < 86400}
+            save_linger(linger_until)
 
             games = new_games
             print(f"Refreshed: {len(games)} live/recent games")

@@ -943,17 +943,10 @@ pre {
         </div>
       </div>
       <div id="sim-nfl-fields" style="display:none;grid-column:1/-1">
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
-          <div class="form-group" style="margin:0">
-            <label class="form-label">Down &amp; Distance</label>
-            <input type="text" id="sim-down-distance" value="" maxlength="16" placeholder="e.g. 3rd &amp; 7"
-                   style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:14px;padding:8px 12px;outline:none;">
-          </div>
-          <div class="form-group" style="margin:0">
-            <label class="form-label">Possession (team abbr)</label>
-            <input type="text" id="sim-possession" value="" maxlength="4" placeholder="e.g. KC"
-                   style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:14px;padding:8px 12px;outline:none;text-transform:uppercase">
-          </div>
+        <div class="form-group" style="margin:0">
+          <label class="form-label">Down &amp; Distance</label>
+          <input type="text" id="sim-down-distance" value="" maxlength="16" placeholder="e.g. 3rd &amp; 7"
+                 style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:14px;padding:8px 12px;outline:none;">
         </div>
       </div>
     </div>
@@ -1007,8 +1000,11 @@ pre {
         <label class="form-label">Playoff Seed</label>
         <input type="number" id="sim-away-seed" value="1" min="1" max="8">
       </div>
-      <div class="btn-row" style="margin-top:12px">
-        <button class="btn btn-secondary" onclick="flashScore('away')" style="font-size:11px;padding:6px 12px">Flash Score</button>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px">
+        <label class="sim-possession-row" style="display:none;font-family:var(--mono);font-size:12px;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="sim-away-possession" onchange="setPossession('away')"> Has Possession
+        </label>
+        <button class="btn btn-secondary" onclick="flashScore('away')" style="font-size:11px;padding:6px 12px;margin-left:auto">Flash Score</button>
       </div>
     </div>
 
@@ -1031,8 +1027,11 @@ pre {
         <label class="form-label">Playoff Seed</label>
         <input type="number" id="sim-home-seed" value="1" min="1" max="8">
       </div>
-      <div class="btn-row" style="margin-top:12px">
-        <button class="btn btn-secondary" onclick="flashScore('home')" style="font-size:11px;padding:6px 12px">Flash Score</button>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px">
+        <label class="sim-possession-row" style="display:none;font-family:var(--mono);font-size:12px;align-items:center;gap:6px;cursor:pointer">
+          <input type="checkbox" id="sim-home-possession" onchange="setPossession('home')"> Has Possession
+        </label>
+        <button class="btn btn-secondary" onclick="flashScore('home')" style="font-size:11px;padding:6px 12px;margin-left:auto">Flash Score</button>
       </div>
     </div>
   </div>
@@ -1673,8 +1672,8 @@ function renderMatrix(game, awayImg, homeImg) {
     }
   }
 
-  // Possession dot (only when no score diff)
-  if (diff === 0 && game.possession && game.is_live) {
+  // Possession dot (NFL only, always shown when possession is set)
+  if (game.possession && game.is_live && game.sport === 'nfl') {
     ctx.fillStyle = '#ffffff';
     if (game.possession === game.away.abbreviation) {
       ctx.fillRect((AWAY_CX - 1) * S, 17 * S, 3 * S, 1 * S);
@@ -2070,6 +2069,14 @@ const SIM_TEAMS = {
   ],
 };
 
+function setPossession(side) {
+  if (side === 'away' && document.getElementById('sim-away-possession').checked) {
+    document.getElementById('sim-home-possession').checked = false;
+  } else if (side === 'home' && document.getElementById('sim-home-possession').checked) {
+    document.getElementById('sim-away-possession').checked = false;
+  }
+}
+
 function updateSimTeams(awayDefault, homeDefault) {
   const sport = document.getElementById('sim-sport').value;
   const teams = SIM_TEAMS[sport] || [];
@@ -2083,13 +2090,21 @@ function updateSimTeams(awayDefault, homeDefault) {
     ).join('');
   });
   document.getElementById('sim-nfl-fields').style.display = sport === 'nfl' ? 'block' : 'none';
+  const showPoss = sport === 'nfl';
+  document.querySelectorAll('.sim-possession-row').forEach(el => el.style.display = showPoss ? 'flex' : 'none');
+  if (!showPoss) {
+    document.getElementById('sim-away-possession').checked = false;
+    document.getElementById('sim-home-possession').checked = false;
+  }
+  toggleSimPlayoff();
 }
 
 let simAwayWins = 0, simHomeWins = 0;
 
 function toggleSimPlayoff() {
-  const on = document.getElementById('sim-playoff').checked;
-  document.getElementById('sim-series-section').style.display = on ? 'block' : 'none';
+  const on    = document.getElementById('sim-playoff').checked;
+  const isNfl = document.getElementById('sim-sport').value === 'nfl';
+  document.getElementById('sim-series-section').style.display = (on && !isNfl) ? 'block' : 'none';
   document.querySelectorAll('.sim-seed-field').forEach(el => el.style.display = on ? '' : 'none');
 }
 
@@ -2120,6 +2135,7 @@ function updateSeriesPreview() {
 }
 
 async function runSim() {
+  const sport     = document.getElementById('sim-sport').value;
   const awayPct   = parseInt(document.getElementById('sim-away-pct').value) / 100;
   const isPlayoff = document.getElementById('sim-playoff').checked;
   const awaySeed  = isPlayoff ? (parseInt(document.getElementById('sim-away-seed').value) || 1) : 0;
@@ -2139,13 +2155,16 @@ async function runSim() {
     is_halftime: document.getElementById('sim-halftime').checked,
     is_ot: document.getElementById('sim-ot').checked,
     is_playoff: isPlayoff,
-    series_summary: isPlayoff ? buildSeriesSummary() : '',
-    game_label:     isPlayoff ? buildGameLabel()     : '',
+    series_summary: (isPlayoff && sport !== 'nfl') ? buildSeriesSummary() : '',
+    game_label:     (isPlayoff && sport !== 'nfl') ? buildGameLabel()     : '',
     away_win_pct: awayPct,
-    down_distance: document.getElementById('sim-sport').value === 'nfl'
+    down_distance: sport === 'nfl'
       ? (document.getElementById('sim-down-distance').value.trim() || null) : null,
-    possession: document.getElementById('sim-sport').value === 'nfl'
-      ? (document.getElementById('sim-possession').value.trim().toUpperCase() || null) : null,
+    possession: document.getElementById('sim-away-possession').checked
+      ? document.getElementById('sim-away-abbr').value
+      : document.getElementById('sim-home-possession').checked
+        ? document.getElementById('sim-home-abbr').value
+        : null,
   };
   try {
     await fetch('/api/simulate', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
