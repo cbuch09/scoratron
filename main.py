@@ -6,6 +6,7 @@ import signal
 import os
 import json
 import requests
+from datetime import datetime, timezone
 from renderer import ScoreBugRenderer
 from score_fetcher import ScoreFetcher
 from config import Config
@@ -73,23 +74,16 @@ def write_weather_preview(weather):
     except Exception as e:
         print(f'[preview] weather write error: {e}')
 
-LINGER_FILE = '/tmp/scoratron_linger.json'
-
-def load_linger():
+def game_started_within(game, seconds):
+    """Return True if the game's start time is within the last `seconds` seconds."""
+    if not game.start_time_utc:
+        return True  # unknown start time — assume recent
     try:
-        if os.path.exists(LINGER_FILE):
-            with open(LINGER_FILE) as f:
-                return {k: float(v) for k, v in json.load(f).items()}
+        start = datetime.fromisoformat(game.start_time_utc.replace("Z", "+00:00"))
+        age = (datetime.now(timezone.utc) - start).total_seconds()
+        return age < seconds
     except Exception:
-        pass
-    return {}
-
-def save_linger(linger_until):
-    try:
-        with open(LINGER_FILE, 'w') as f:
-            json.dump(linger_until, f)
-    except Exception as e:
-        print(f'[linger] save error: {e}')
+        return True
 
 def load_webui_settings():
     path = '/home/admin/scoratron/settings.json'
@@ -298,8 +292,7 @@ def main():
     last_scroll_time = time.time()
     games = []
     last_scores = {}
-    linger_until = load_linger()
-    is_first_fetch = True
+    linger_until = {}
     scroll_offset = 0
     scroll_strip  = None
     LINGER_SECONDS = 30 * 60
@@ -359,20 +352,20 @@ def main():
                 if g:
                     new_games.extend(g)
 
-            # Track when games go final and set linger timer.
-            # On the first fetch after startup, games already in "post" state
-            # are treated as immediately expired so stale scores don't reappear.
+            # Assign linger windows to finished games.
+            # Games whose start time is > 6 hours ago are stale (off-season relics,
+            # yesterday's games, etc.) and are suppressed immediately.
+            # Games that started recently get a 30-minute display window.
             for game in new_games:
                 if game.status == "post" and game.game_id not in linger_until:
-                    if is_first_fetch:
-                        linger_until[game.game_id] = 0  # already finished — suppress
-                    else:
+                    if game_started_within(game, 6 * 3600):
                         linger_until[game.game_id] = now + LINGER_SECONDS
                         print(f"[linger] {game.away.abbreviation} vs {game.home.abbreviation} final — showing for 30min")
-            is_first_fetch = False
+                    else:
+                        linger_until[game.game_id] = 0  # stale — suppress
+                        print(f"[linger] {game.away.abbreviation} vs {game.home.abbreviation} stale — suppressed")
 
-            # Drop finished games whose linger window has closed — prevents ESPN
-            # from re-adding them indefinitely after the 30-min window expires
+            # Drop finished games whose linger window has closed
             new_games = [g for g in new_games
                          if g.status != "post" or now < linger_until.get(g.game_id, 0)]
 
@@ -383,12 +376,39 @@ def main():
                     if game.game_id in linger_until and now < linger_until[game.game_id]:
                         new_games.append(game)
 
-            # Prune entries older than 24h to prevent unbounded growth
-            linger_until = {gid: t for gid, t in linger_until.items() if now - t < 86400}
-            save_linger(linger_until)
+            # Prune entries that expired more than 24h ago (keep t=0 "suppressed" entries
+            # so stale games are never re-admitted with a fresh timer)
+            linger_until = {gid: t for gid, t in linger_until.items()
+                            if t == 0 or now - t < 86400}
 
-            games = new_games
-            print(f"Refreshed: {len(games)} live/recent games")
+            # Priority: live → lingering finals → upcoming (once first game within 60 min)
+            live     = [g for g in new_games if g.is_live]
+            finished = [g for g in new_games if g.status == "post"]
+            upcoming = [g for g in new_games if g.status == "pre"]
+
+            if live:
+                games = live
+            elif finished:
+                games = finished
+            elif upcoming:
+                from datetime import datetime as _dt, timezone as _tz, timedelta as _td
+                _now = _dt.now(_tz.utc)
+                _cutoff = _now + _td(minutes=60)
+                def _start(g):
+                    if not g.start_time_utc:
+                        return _now
+                    try:
+                        return _dt.fromisoformat(g.start_time_utc.replace("Z", "+00:00"))
+                    except Exception:
+                        return _now
+                if min(_start(g) for g in upcoming) <= _cutoff:
+                    games = upcoming
+                else:
+                    games = []
+            else:
+                games = []
+
+            print(f"Refreshed: {len(games)} displayable games (live={len(live)} finished={len(finished)} upcoming={len(upcoming)})")
             last_fetch = now
             scroll_strip = None   # rebuild on next scroll frame
 

@@ -86,37 +86,7 @@ class ScoreFetcher:
             return 2
 
         games.sort(key=sort_key)
-
-        # Priority: live → recent finished → upcoming
-        live = [g for g in games if g.is_live]
-        if live:
-            return live
-
-        # No live games — show all finished games so the display can scroll through them
-        finished = [g for g in games if g.status == "post"]
-        if finished:
-            non_stale = [g for g in finished if g.sport == "nba" or not g.is_playoff]
-            if non_stale:
-                return non_stale
-
-        # No live or recent finished — show all upcoming games once the first
-        # game of the day is within 60 minutes
-        upcoming = [g for g in games if g.status == "pre"]
-        if upcoming:
-            now_utc = datetime.now(timezone.utc)
-            cutoff  = now_utc + timedelta(minutes=60)
-            def start_dt(g):
-                if not g.start_time_utc:
-                    return now_utc
-                try:
-                    return datetime.fromisoformat(g.start_time_utc.replace("Z", "+00:00"))
-                except Exception:
-                    return now_utc
-            earliest = min(start_dt(g) for g in upcoming)
-            if earliest <= cutoff:
-                return upcoming
-
-        return []
+        return games
 
     def _parse_event(self, event: dict) -> Optional[GameState]:
         try:
