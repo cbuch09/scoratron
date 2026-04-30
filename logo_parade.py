@@ -155,13 +155,14 @@ def run_parade(sport="nba", brightness=60, loop=True):
     else:
         tagged = [(t, sport_dir) for t in teams]
 
-    # Build strip
-    total_width = len(tagged) * ITEM_WIDTH + MATRIX_COLS
+    # Build strip — logos start at x=0, seamless wrap copy appended at end
+    loop_width  = len(tagged) * ITEM_WIDTH          # pixels before seamless repeat
+    total_width = loop_width + MATRIX_COLS           # extra copy for smooth wrap
     strip = Image.new("RGB", (total_width, MATRIX_ROWS), (0, 0, 0))
     draw  = ImageDraw.Draw(strip)
 
     for i, (abbr, sp) in enumerate(tagged):
-        x    = i * ITEM_WIDTH + MATRIX_COLS
+        x    = i * ITEM_WIDTH
         logo = load_logo(abbr, sp)
         strip.paste(logo, (x, 0))
 
@@ -176,6 +177,9 @@ def run_parade(sport="nba", brightness=60, loop=True):
         if r + g + b < 60:
             color = (120, 120, 120)
         draw.text((tx, LABEL_Y), abbr, font=FONT, fill=color)
+
+    # Copy first MATRIX_COLS pixels to end so looping is seamless
+    strip.paste(strip.crop((0, 0, MATRIX_COLS, MATRIX_ROWS)), (loop_width, 0))
 
     print(f"[parade] {len(tagged)} logos loaded, strip width={total_width}px")
     print("[parade] Scrolling — Ctrl+C to stop")
@@ -205,10 +209,10 @@ def run_parade(sport="nba", brightness=60, loop=True):
 
         offset += SCROLL_SPEED
 
-        # Loop: when we've scrolled all logos off the left, reset
-        if offset >= total_width - MATRIX_COLS:
+        # Loop: wrap back seamlessly once we've passed the full logo sequence
+        if offset >= loop_width:
             if loop:
-                offset = 0
+                offset -= loop_width   # seamless: no black gap
             else:
                 break
 
@@ -231,12 +235,13 @@ def run_parade_on_matrix(matrix, canvas, sport="nba", stop_fn=None):
     else:
         tagged = [(t, "nba") for t in NBA_TEAMS]
 
-    total_width = len(tagged) * ITEM_WIDTH + MATRIX_COLS
+    loop_width  = len(tagged) * ITEM_WIDTH
+    total_width = loop_width + MATRIX_COLS
     strip = Image.new("RGB", (total_width, MATRIX_ROWS), (0, 0, 0))
     draw  = ImageDraw.Draw(strip)
 
     for i, (abbr, sp) in enumerate(tagged):
-        x    = i * ITEM_WIDTH + MATRIX_COLS
+        x    = i * ITEM_WIDTH
         logo = load_logo(abbr, sp)
         strip.paste(logo, (x, 0))
         try:
@@ -251,6 +256,9 @@ def run_parade_on_matrix(matrix, canvas, sport="nba", stop_fn=None):
             color = (120, 120, 120)
         draw.text((tx, LABEL_Y), abbr, font=FONT, fill=color)
 
+    # Seamless wrap: copy first MATRIX_COLS pixels to the end
+    strip.paste(strip.crop((0, 0, MATRIX_COLS, MATRIX_ROWS)), (loop_width, 0))
+
     offset = 0
     while True:
         if stop_fn and stop_fn():
@@ -258,7 +266,7 @@ def run_parade_on_matrix(matrix, canvas, sport="nba", stop_fn=None):
         frame  = strip.crop((offset, 0, offset + MATRIX_COLS, MATRIX_ROWS))
         canvas.SetImage(frame)
         canvas = matrix.SwapOnVSync(canvas)
-        offset = (offset + SCROLL_SPEED) % (total_width - MATRIX_COLS)
+        offset = (offset + SCROLL_SPEED) % loop_width
         time.sleep(FRAME_DELAY)
 
     matrix.Clear()

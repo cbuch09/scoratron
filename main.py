@@ -286,11 +286,22 @@ def main():
     LINGER_SECONDS = 30 * 60
 
 
+    applied_brightness = args.brightness
+
     while True:
         now = time.time()
 
         # Reload webui settings on each refresh cycle
         webui = load_webui_settings()
+
+        # Apply brightness changes immediately without a restart
+        if webui:
+            new_brightness = int(webui.get('brightness', applied_brightness))
+            if new_brightness != applied_brightness:
+                applied_brightness = new_brightness
+                if renderer._matrix:
+                    renderer._matrix.brightness = new_brightness
+                    print(f'[settings] brightness → {new_brightness}%')
 
         # Check if WiFi setup is active — show setup instructions instead of scores
         if load_wifi_setup_active():

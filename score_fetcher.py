@@ -13,6 +13,39 @@ from config import Config, ESPN_ENDPOINTS, TEAM_COLORS, LOGO_DIR
 
 REQUEST_TIMEOUT = 10   # seconds
 
+_SEED_ENDPOINTS = {
+    # seasontype=2 (regular season) gives the accurate pre-playoff bracket seeds.
+    # seasontype=3 (playoff) recalculates standings and produces wrong values.
+    'nba': 'https://site.api.espn.com/apis/v2/sports/basketball/nba/standings?seasontype=2',
+    'nfl': 'https://site.api.espn.com/apis/v2/sports/football/nfl/standings?seasontype=2',
+}
+_seed_cache: dict = {}   # {sport: {team_abbr: seed}}
+
+def _fetch_playoff_seeds(sport: str, session) -> dict:
+    """Return {abbr: seed} for current playoff teams. Cached for the session."""
+    if sport in _seed_cache:
+        return _seed_cache[sport]
+    url = _SEED_ENDPOINTS.get(sport)
+    if not url:
+        return {}
+    try:
+        r = session.get(url, timeout=REQUEST_TIMEOUT, verify='/etc/ssl/certs/ca-certificates.crt')
+        r.raise_for_status()
+        seeds = {}
+        for conf in r.json().get('children', []):
+            for entry in conf.get('standings', {}).get('entries', []):
+                abbr = entry.get('team', {}).get('abbreviation', '')
+                for stat in entry.get('stats', []):
+                    if stat.get('name') == 'playoffSeed':
+                        val = stat.get('value')
+                        if val:
+                            seeds[abbr] = int(val)
+        _seed_cache[sport] = seeds
+        return seeds
+    except Exception as e:
+        print(f'[fetcher] seed fetch error: {e}')
+        return {}
+
 class ScoreFetcher:
     def __init__(self, config: Config):
         self.config = config
@@ -123,6 +156,7 @@ class ScoreFetcher:
                 return None
 
             home = away = None
+            home_comp = away_comp = {}
             for c in competitors:
                 team_data = c.get("team", {})
                 abbr  = team_data.get("abbreviation", "UNK")
@@ -153,7 +187,8 @@ class ScoreFetcher:
                         record = rec.get("summary", "")
                         break
 
-                seed = int(c.get("curatedRank", {}).get("current", 0) or 0)
+                playoff_seeds = _fetch_playoff_seeds(self.config.sport, self.session)
+                seed = playoff_seeds.get(abbr, 0)
 
                 team = TeamInfo(
                     name=name,
@@ -169,8 +204,10 @@ class ScoreFetcher:
 
                 if c.get("homeAway") == "home":
                     home = team
+                    home_comp = c
                 else:
                     away = team
+                    away_comp = c
 
             if not home or not away:
                 return None
@@ -203,20 +240,24 @@ class ScoreFetcher:
             season = event.get("season", {})
             is_playoff = season.get("type") == 3 or season.get("slug") == "post-season"
 
-            # Series record
+            # Series record — data lives on competition, not event
             series_summary = ""
             game_label = ""
-            series = event.get("series", {})
+            series = comp.get("series", {}) or event.get("series", {})
             if series and is_playoff:
-                away_wins = series.get("competitors", [{}])[0].get("wins", 0) if series.get("competitors") else 0
-                home_wins = series.get("competitors", [{}])[1].get("wins", 0) if series.get("competitors") else 0
+                # Match series wins by team ID — order varies, don't assume away/home
+                wins_by_id = {str(s["id"]): s.get("wins", 0) for s in series.get("competitors", [])}
+                away_id = str(away_comp.get("team", {}).get("id", ""))
+                home_id = str(home_comp.get("team", {}).get("id", ""))
+                away_wins = wins_by_id.get(away_id, 0)
+                home_wins = wins_by_id.get(home_id, 0)
                 total = away_wins + home_wins
                 if away_wins == home_wins:
                     series_summary = f"Tied {away_wins}-{home_wins}"
                 elif away_wins > home_wins:
-                    series_summary = f"{away.abbreviation} {away_wins}-{home_wins}"
+                    series_summary = f"{away.abbreviation} leads {away_wins}-{home_wins}"
                 else:
-                    series_summary = f"{home.abbreviation} {home_wins}-{away_wins}"
+                    series_summary = f"{home.abbreviation} leads {home_wins}-{away_wins}"
                 game_label = f"Game {total + 1}" if total < 7 else "Game 7"
 
             # Check notes for named games like Super Bowl

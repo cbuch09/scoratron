@@ -110,6 +110,24 @@ DIGITS = {
     '#': ["101","111","101","111","101"],
 }
 
+# 5×5 hash glyph — two horizontal bars with two vertical columns
+HASH_5 = ["01010","11111","01010","11111","01010"]
+
+def _seed_label_w(seed: int) -> int:
+    """Pixel width of a seed label drawn by draw_seed_label: 5px(#) + 1gap + 3px per digit."""
+    digits = len(str(seed))
+    return 5 + 1 + digits * 4 - 1   # trailing gap on last digit not counted → -1
+
+def draw_seed_label(draw, seed: int, x: int, y: int, color):
+    """Draw seed as a 5×5 '#' then the digit(s) in the 3×5 micro font, 1px gap between."""
+    # Draw '#' at 5px wide
+    for ry, row in enumerate(HASH_5):
+        for rx, bit in enumerate(row):
+            if bit == '1':
+                draw.point((x + rx, y + ry), fill=color)
+    # Draw digit(s) 1px after the hash
+    draw_micro_text(draw, str(seed), x + 5 + 1, y, color)
+
 def draw_big_digit(draw, char, x, y, color):
     rows = DIGITS.get(char, DIGITS['-'])
     for ry, row in enumerate(rows):
@@ -444,17 +462,17 @@ class ScoreBugRenderer:
             (game.away, 0, 0),
             (game.home, MATRIX_COLS - BAR_W, 1),
         ]:
-            if game.is_playoff and team.seed:
-                label = f"#{team.seed}"
-            elif not game.is_playoff and team.record:
-                label = team.record
-            else:
-                continue
             r, g, b = team.color
             color = (r, g, b) if r + g + b >= 60 else (80, 80, 80)
-            lw = (len(label) - 1) * 4 + 3
-            lx = bar_x + (BAR_W - lw) // 2 + nudge
-            draw_micro_text(draw, label, lx, 27, color)
+            if game.is_playoff and team.seed:
+                lw = _seed_label_w(team.seed)
+                lx = bar_x + (BAR_W - lw) // 2 + nudge
+                draw_seed_label(draw, team.seed, lx, 27, color)
+            elif not game.is_playoff and team.record:
+                label = team.record
+                lw = (len(label) - 1) * 4 + 3
+                lx = bar_x + (BAR_W - lw) // 2 + nudge
+                draw_micro_text(draw, label, lx, 27, color)
 
     def _draw_header(self, draw, game):
         if game.is_halftime:
@@ -592,27 +610,22 @@ class ScoreBugRenderer:
         if not game.is_live:
             return
 
-        def _label(team):
+        def _label_w(team):
             if game.is_playoff and team.seed:
-                return f"#{team.seed}"
-            return team.record or ""
+                return _seed_label_w(team.seed)
+            return (len(team.record) - 1) * 4 + 3 if team.record else 0
 
-        def _micro_w(label):
-            return (len(label) - 1) * 4 + 3 if label else 0
+        away_lw = _label_w(game.away)
+        home_lw = _label_w(game.home)
 
-        away_lbl = _label(game.away)
-        home_lbl = _label(game.home)
-
-        if away_lbl:
-            lw = _micro_w(away_lbl)
-            lx = (BAR_W - lw) // 2          # bar_x=0 for away, nudge=0
-            bar_start = lx + lw + 1          # 1px gap after last lit pixel
+        if away_lw:
+            lx = (BAR_W - away_lw) // 2
+            bar_start = lx + away_lw + 1     # 1px gap after last lit pixel
         else:
             bar_start = LEFT_EDGE
 
-        if home_lbl:
-            lw = _micro_w(home_lbl)
-            lx = (MATRIX_COLS - BAR_W) + (BAR_W - lw) // 2 + 1  # nudge=1 for home
+        if home_lw:
+            lx = (MATRIX_COLS - BAR_W) + (BAR_W - home_lw) // 2 + 1  # nudge=1
             bar_end = lx - 2                 # 1px gap before first lit pixel
         else:
             bar_end = RIGHT_EDGE - 1

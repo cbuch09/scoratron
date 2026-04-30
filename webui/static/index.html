@@ -417,6 +417,7 @@ select:focus, input[type=number]:focus { border-color: var(--accent); }
 .btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   padding: 10px 20px;
   border-radius: 4px;
@@ -713,9 +714,11 @@ pre {
   <button class="nav-tab" onclick="showPage('simulator')">Simulator</button>
   <button class="nav-tab" onclick="showPage('parade')">Logo Parade</button>
   <button class="nav-tab" onclick="showPage('apidata')">API Data</button>
-  <button class="nav-tab" onclick="showPage('system')">System</button>
   <button class="nav-tab" onclick="showPage('weather')">Weather</button>
   <button class="nav-tab" onclick="showPage('wifi')">WiFi</button>
+  <button class="nav-tab" onclick="showPage('logoeditor')">Logo Editor</button>
+  <div style="flex:1"></div>
+  <button class="nav-tab" onclick="showPage('system')">System</button>
   <button class="nav-tab" onclick="showPage('code')">Code</button>
 </nav>
 
@@ -989,15 +992,39 @@ pre {
 
 <!-- ── SYSTEM ── -->
 <div class="page" id="page-system">
-  <div class="section-label">// system information</div>
-  <div class="sysinfo-grid" id="sysinfo-grid" style="margin-bottom:32px">
+  <div class="section-label">// host information</div>
+  <div class="sysinfo-grid" id="sysinfo-os-grid" style="margin-bottom:28px">
+    <div style="color:#404060;font-family:var(--mono);font-size:13px">Loading...</div>
+  </div>
+
+  <div class="section-label">// runtime</div>
+  <div class="sysinfo-grid" id="sysinfo-grid" style="margin-bottom:28px">
     <div style="color:#404060;font-family:var(--mono);font-size:13px">Loading...</div>
   </div>
 
   <div class="section-label">// service controls</div>
-  <div class="flex-row mt16">
-    <button class="btn btn-secondary" onclick="forceRefresh()">Force API Refresh</button>
+  <div class="flex-row mt16" style="margin-bottom:28px">
     <button class="btn btn-warning" onclick="restartService()">Restart Service</button>
+  </div>
+
+  <div class="section-label">// github</div>
+  <div style="font-family:var(--mono);font-size:12px;color:var(--muted);margin:12px 0 8px">cbuch09/scoratron · master</div>
+  <div style="margin-bottom:8px">
+    <input type="text" id="git-commit-msg" placeholder="Commit message (optional)"
+      style="width:100%;max-width:420px;background:var(--surface);border:1px solid var(--border);border-radius:6px;
+             padding:8px 12px;color:var(--text);font-family:var(--mono);font-size:12px;box-sizing:border-box">
+  </div>
+  <div class="flex-row" style="margin-bottom:8px">
+    <button class="btn btn-secondary" onclick="gitPush()">Push to GitHub</button>
+    <button class="btn btn-secondary" onclick="gitPull()">Pull from GitHub</button>
+  </div>
+  <div id="git-status" style="font-family:var(--mono);font-size:12px;color:var(--muted);min-height:18px"></div>
+
+  <div class="section-label" style="margin-top:28px">// os update</div>
+  <div style="font-family:var(--mono);font-size:12px;color:var(--muted);margin:12px 0 16px" id="sysinfo-updates">—</div>
+  <div class="flex-row">
+    <button class="btn btn-secondary" onclick="osUpdate()">Update Package Lists</button>
+    <button class="btn btn-secondary" onclick="osUpgrade()">Upgrade OS</button>
   </div>
 </div>
 
@@ -1096,6 +1123,98 @@ pre {
   </div>
 </div>
 
+<!-- ── LOGO EDITOR ── -->
+<div class="page" id="page-logoeditor" style="padding:0">
+  <div id="le-layout" style="display:flex;height:calc(100vh - 100px);gap:0;overflow:hidden">
+
+    <!-- Left: logo browser + drop zone -->
+    <div id="le-sidebar" style="width:210px;min-width:160px;border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0">
+      <div style="padding:10px 8px 6px;flex-shrink:0">
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <button class="btn btn-primary le-sport-btn" data-sport="nba" onclick="leSetSport('nba')" style="flex:1;padding:4px 0;font-size:12px;text-align:center">NBA</button>
+          <button class="btn le-sport-btn" data-sport="nfl" onclick="leSetSport('nfl')" style="flex:1;padding:4px 0;font-size:12px;text-align:center">NFL</button>
+        </div>
+        <label style="font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px;padding:2px 0">
+          <input type="checkbox" id="le-show-originals" onchange="leToggleOriginals()"> Show originals
+        </label>
+      </div>
+      <div id="le-logo-list" style="flex:1;overflow-y:auto;padding:0 8px 8px;display:flex;flex-direction:column;gap:4px"></div>
+    </div>
+
+    <!-- Center: canvas -->
+    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+      <div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+        <span id="le-logo-name" style="font-weight:600;font-size:14px;min-width:60px">No logo</span>
+        <label style="font-size:12px;color:var(--muted)">Zoom
+          <input type="range" id="le-zoom" min="4" max="64" value="16" style="margin-left:6px;width:110px" oninput="leZoomChange()">
+          <span id="le-zoom-val" style="margin-left:4px;font-family:var(--mono);font-size:11px;min-width:28px">16×</span>
+        </label>
+        <label style="font-size:12px;color:var(--muted)">
+          <input type="checkbox" id="le-grid" checked onchange="leRedraw()"> Grid
+        </label>
+        <label style="font-size:12px;color:var(--muted)">
+          <input type="checkbox" id="le-checkerboard" checked onchange="leRedraw()"> Alpha BG
+        </label>
+      </div>
+      <div id="le-canvas-wrap" style="flex:1;overflow:auto;padding:16px;display:flex;align-items:flex-start;justify-content:flex-start">
+        <canvas id="le-canvas" style="cursor:crosshair;image-rendering:pixelated"></canvas>
+      </div>
+      <div style="padding:8px 12px;border-top:1px solid var(--border);font-family:var(--mono);font-size:11px;color:var(--muted)" id="le-statusbar">Select a logo to edit</div>
+    </div>
+
+    <!-- Right: tools -->
+    <div style="width:210px;min-width:180px;border-left:1px solid var(--border);padding:14px 12px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;flex-shrink:0">
+
+      <!-- Color picker -->
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Color</div>
+        <input type="color" id="le-color" value="#ffffff" style="width:100%;height:36px;border:none;border-radius:6px;cursor:pointer;background:none">
+        <div style="display:flex;gap:6px;margin-top:6px;align-items:center">
+          <span style="font-size:11px;color:var(--muted)">Alpha</span>
+          <input type="range" id="le-alpha" min="0" max="255" value="255" style="flex:1" oninput="leAlphaChange()">
+          <span id="le-alpha-val" style="font-family:var(--mono);font-size:11px;min-width:24px">255</span>
+        </div>
+      </div>
+
+      <!-- Tool selector -->
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Tool</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px">
+          <button class="btn le-tool-btn active" data-tool="draw"    onclick="leSetTool('draw')"    style="font-size:12px;padding:5px 0;text-align:center">Draw</button>
+          <button class="btn le-tool-btn"        data-tool="erase"   onclick="leSetTool('erase')"   style="font-size:12px;padding:5px 0;text-align:center">Erase</button>
+          <button class="btn le-tool-btn"        data-tool="eyedrop" onclick="leSetTool('eyedrop')" style="font-size:12px;padding:5px 0;text-align:center">Pick</button>
+          <button class="btn le-tool-btn"        data-tool="fill"    onclick="leSetTool('fill')"    style="font-size:12px;padding:5px 0;text-align:center">Fill</button>
+          <button class="btn le-tool-btn"        data-tool="select"  onclick="leSetTool('select')"  style="font-size:12px;padding:5px 0;text-align:center;grid-column:1/-1">Select / Move</button>
+        </div>
+        <!-- Undo / Redo -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-top:4px">
+          <button class="btn" id="le-undo-btn" onclick="leUndo()" style="font-size:12px;padding:5px 0;text-align:center" disabled>Undo</button>
+          <button class="btn" id="le-redo-btn" onclick="leRedo()" style="font-size:12px;padding:5px 0;text-align:center" disabled>Redo</button>
+        </div>
+      </div>
+
+      <!-- Current palette (colors in this logo) -->
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Palette</div>
+        <div id="le-cur-palette" style="display:flex;flex-wrap:wrap;gap:4px"><span style="font-size:11px;color:var(--muted)">—</span></div>
+      </div>
+
+      <!-- Recent colors -->
+      <div>
+        <div style="font-size:11px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Recent</div>
+        <div id="le-palette" style="display:flex;flex-wrap:wrap;gap:4px"></div>
+      </div>
+
+      <!-- Actions -->
+      <div style="margin-top:auto;display:flex;flex-direction:column;gap:6px">
+        <div style="font-size:11px;font-weight:600;color:var(--muted);letter-spacing:1px;text-transform:uppercase;margin-bottom:2px">Actions</div>
+        <button class="btn btn-primary" onclick="leSave()"          style="font-size:13px;width:100%">Save to Board</button>
+        <button class="btn"            onclick="leResetDefault()" style="font-size:13px;width:100%">Reset to Default</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -1141,6 +1260,7 @@ function showPage(id) {
   if (id === 'weather') loadWeatherPage();
   if (id === 'wifi') loadWifiStatus();
   if (id === 'code') loadCodeFiles();
+  if (id === 'logoeditor') leInit();
 }
 
 // ── Toast ────────────────────────────────────────────────────────────────────
@@ -1269,7 +1389,7 @@ function renderMatrix(game, awayImg, homeImg) {
   ctx.fillText(game.away.abbreviation, BAR_W/2 * S, 20 * S);
   ctx.fillText(game.home.abbreviation, (W - BAR_W/2) * S, 20 * S);
 
-  // Team record / seed at row 27 (micro text in team color)
+  // 3×5 micro text renderer
   function drawMicroText(txt, x, y, color) {
     ctx.fillStyle = color;
     let cx = x;
@@ -1286,17 +1406,38 @@ function renderMatrix(game, awayImg, homeImg) {
   }
   function microWidth(txt) { return (txt.length - 1) * 4 + 3; }
 
+  // 5×5 hash glyph matching Python's HASH_5, then 3×5 digits — mirrors draw_seed_label()
+  const HASH_5 = ["01010","11111","01010","11111","01010"];
+  function seedLabelW(seed) {
+    const digits = String(seed).length;
+    return 5 + 1 + digits * 4 - 1;   // 5px hash + 1px gap + digits (no trailing gap)
+  }
+  function drawSeedLabel(seed, x, y, color) {
+    ctx.fillStyle = color;
+    HASH_5.forEach((row, ry) => {
+      [...row].forEach((bit, rx) => {
+        if (bit === '1') ctx.fillRect((x + rx) * S, (y + ry) * S, S, S);
+      });
+    });
+    drawMicroText(String(seed), x + 6, y, color);   // 5px hash + 1px gap
+  }
+
+  // Team record / seed at row 27
   for (const [team, barX, nudge] of [
     [game.away, 0, 0],
     [game.home, W - BAR_W, 1],
   ]) {
-    const label = (game.is_playoff && team.seed) ? `#${team.seed}` : (team.record || '');
-    if (!label) continue;
     const [r,g,b] = team.color;
     const col = (r+g+b >= 60) ? rgbToHex(r,g,b) : '#505050';
-    const lw = microWidth(label);
-    const lx = barX + Math.floor((BAR_W - lw) / 2) + nudge;
-    drawMicroText(label, lx, 27, col);
+    if (game.is_playoff && team.seed) {
+      const lw = seedLabelW(team.seed);
+      const lx = barX + Math.floor((BAR_W - lw) / 2) + nudge;
+      drawSeedLabel(team.seed, lx, 27, col);
+    } else if (team.record) {
+      const lw = microWidth(team.record);
+      const lx = barX + Math.floor((BAR_W - lw) / 2) + nudge;
+      drawMicroText(team.record, lx, 27, col);
+    }
   }
 
   // Header — period/status
@@ -1392,22 +1533,21 @@ function renderMatrix(game, awayImg, homeImg) {
     ctx.fillText(game.series_summary, CX * S, 26 * S);
   }
 
-  // Win probability bar — 1px after last lit pixel of each team's record label
+  // Win probability bar — 1px after last lit pixel of each team's record/seed label
   if (game.is_live) {
-    function microW(lbl) { return lbl ? (lbl.length - 1) * 4 + 3 : 0; }
-    const awayLbl = (game.is_playoff && game.away.seed) ? `#${game.away.seed}` : (game.away.record || '');
-    const homeLbl = (game.is_playoff && game.home.seed) ? `#${game.home.seed}` : (game.home.record || '');
+    const awayIsSeeded = game.is_playoff && game.away.seed;
+    const homeIsSeeded = game.is_playoff && game.home.seed;
+    const awayLw = awayIsSeeded ? seedLabelW(game.away.seed) : (game.away.record ? microWidth(game.away.record) : 0);
+    const homeLw = homeIsSeeded ? seedLabelW(game.home.seed) : (game.home.record ? microWidth(game.home.record) : 0);
     let barStart, barEnd;
-    if (awayLbl) {
-      const lw = microW(awayLbl);
-      const lx = Math.floor((BAR_W - lw) / 2);
-      barStart = lx + lw + 1;
+    if (awayLw) {
+      const lx = Math.floor((BAR_W - awayLw) / 2);
+      barStart = lx + awayLw + 1;
     } else {
       barStart = LEFT_EDGE;
     }
-    if (homeLbl) {
-      const lw = microW(homeLbl);
-      const lx = (W - BAR_W) + Math.floor((BAR_W - lw) / 2) + 1;
+    if (homeLw) {
+      const lx = (W - BAR_W) + Math.floor((BAR_W - homeLw) / 2) + 1;
       barEnd = lx - 2;
     } else {
       barEnd = RIGHT_EDGE - 1;
@@ -1464,6 +1604,10 @@ const DIGITS = {
   '8':["111","101","111","101","111"],
   '9':["111","101","111","001","111"],
   '-':["000","000","111","000","000"],
+  '+':["000","010","111","010","000"],
+  '#':["101","111","101","111","101"],
+  '.':["000","000","000","000","010"],
+  ':':["000","010","000","010","000"],
 };
 
 function drawBigDigit(ctx, ch, x, y, color, S) {
@@ -1646,28 +1790,53 @@ async function loadSysInfo() {
     dot.className = 'status-dot' + (d.service === 'active' ? '' : ' off');
     status.textContent = d.service;
     document.getElementById('header-ip').textContent = d.ip;
+
+    const card = ([k, v]) => `<div class="sysinfo-card"><div class="sysinfo-val">${v}</div><div class="sysinfo-key">${k}</div></div>`;
+
+    const osGrid = document.getElementById('sysinfo-os-grid');
+    if (osGrid) osGrid.innerHTML = [
+      ['Hostname', d.hostname || 'N/A'],
+      ['OS', d.os_name   || 'N/A'],
+      ['Kernel',   d.kernel   || 'N/A'],
+      ['Arch',     d.arch     || 'N/A'],
+      ['IP',       d.ip       || 'N/A'],
+    ].map(card).join('');
+
     document.getElementById('sysinfo-grid').innerHTML = [
       ['CPU Temp', d.temp],
-      ['CPU', d.cpu],
-      ['Memory', d.memory],
-      ['Uptime', d.uptime],
-      ['IP', d.ip],
-      ['Service', d.service],
-    ].map(([k,v]) => `
-      <div class="sysinfo-card">
-        <div class="sysinfo-val">${v}</div>
-        <div class="sysinfo-key">${k}</div>
-      </div>`).join('');
+      ['CPU',      d.cpu],
+      ['Memory',   d.memory],
+      ['Uptime',   d.uptime],
+      ['Service',  d.service],
+    ].map(card).join('');
+
+    const upd = document.getElementById('sysinfo-updates');
+    if (upd) {
+      const n = parseInt(d.updates_available) || 0;
+      upd.textContent = n ? `${n} package${n !== 1 ? 's' : ''} available` : 'System is up to date';
+      upd.style.color = n ? 'var(--yellow)' : 'var(--green)';
+    }
   } catch(e) { console.error(e); }
 }
 
-async function forceRefresh() {
+async function osUpdate() {
+  toast('Updating package lists…');
   try {
-    const r = await fetch('/api/refresh', {method:'POST'});
+    const r = await fetch('/api/system/update', {method:'POST'});
     const d = await r.json();
-    toast(`Refreshed — ${d.games} games found`);
-    loadGames();
-  } catch(e) { toast('Refresh failed', true); }
+    toast(d.msg || (d.ok ? 'Done' : d.error), !d.ok);
+    if (d.ok) setTimeout(loadSysInfo, 4000);
+  } catch(e) { toast('Failed', true); }
+}
+
+async function osUpgrade() {
+  if (!confirm('Upgrade all packages? This may take several minutes.')) return;
+  toast('Upgrade started — this may take a while…');
+  try {
+    const r = await fetch('/api/system/upgrade', {method:'POST'});
+    const d = await r.json();
+    toast(d.msg || (d.ok ? 'Done' : d.error), !d.ok);
+  } catch(e) { toast('Failed', true); }
 }
 
 async function restartService() {
@@ -1678,7 +1847,42 @@ async function restartService() {
   } catch(e) { toast('Restart failed', true); }
 }
 
+async function gitPush() {
+  const msg = document.getElementById('git-commit-msg').value.trim()
+    || 'Update from Scoratron web UI';
+  const status = document.getElementById('git-status');
+  status.style.color = 'var(--muted)';
+  status.textContent = 'Pushing...';
+  try {
+    const r = await fetch('/api/system/git-push', {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({message: msg}),
+    });
+    const d = await r.json();
+    if (d.ok) { status.style.color = '#4caf50'; status.textContent = d.msg; toast('Pushed to GitHub'); }
+    else       { status.style.color = '#f44336'; status.textContent = d.error; toast('Push failed', true); }
+  } catch(e) { status.style.color = '#f44336'; status.textContent = String(e); toast('Push failed', true); }
+}
+
+async function gitPull() {
+  const status = document.getElementById('git-status');
+  status.style.color = 'var(--muted)';
+  status.textContent = 'Pulling...';
+  try {
+    const r = await fetch('/api/system/git-pull', {method: 'POST'});
+    const d = await r.json();
+    if (d.ok) { status.style.color = '#4caf50'; status.textContent = d.msg; toast('Pulled from GitHub — services restarting'); }
+    else       { status.style.color = '#f44336'; status.textContent = d.error; toast('Pull failed', true); }
+  } catch(e) { status.style.color = '#f44336'; status.textContent = String(e); toast('Pull failed', true); }
+}
+
 // ── API Data ──────────────────────────────────────────────────────────────────
+const ESPN_URLS = {
+  nba: 'https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard',
+  nfl: 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard',
+};
+
 async function loadApiData() {
   const container = document.getElementById('api-data-container');
   container.innerHTML = '<div style="color:#606080;font-family:var(--mono);font-size:13px">Fetching...</div>';
@@ -1686,16 +1890,29 @@ async function loadApiData() {
     const r = await fetch('/api/rawdata');
     if (!r.ok) throw new Error(`HTTP ${r.status}`);
     const d = await r.json();
+    const cutoff = Date.now() - 7 * 24 * 60 * 60 * 1000;
     let html = '';
     for (const [league, data] of Object.entries(d)) {
-      if (!data || !data.events || !data.events.length) continue;
+      if (!data || !data.events) continue;
+      const events = data.events.filter(ev => {
+        if (!ev.date) return true;
+        return new Date(ev.date).getTime() >= cutoff;
+      });
+      const url = ESPN_URLS[league] || '';
       html += `<div class="api-section">
-        <div class="api-league-header">${league.toUpperCase()} — ${data.events.length} event${data.events.length !== 1 ? 's' : ''}</div>`;
-      for (const event of data.events) {
+        <div class="api-league-header" style="display:flex;align-items:center;gap:16px">
+          <span>${league.toUpperCase()} — ${events.length} event${events.length !== 1 ? 's' : ''}</span>
+          ${url ? `<a href="${url}" target="_blank" rel="noopener" style="font-size:11px;color:var(--accent);font-family:var(--mono);opacity:0.8;text-decoration:none" title="Open ESPN API endpoint">↗ ESPN API</a>` : ''}
+        </div>`;
+      if (!events.length) {
+        html += '<div style="font-family:var(--mono);font-size:12px;color:var(--muted);padding:8px 0">No recent events (past 7 days)</div>';
+      }
+      for (const event of events) {
         const status = event.status?.type?.shortDetail || '';
         html += `<div class="api-event">
           <div class="api-event-header" onclick="toggleApi(this)">
             <span style="color:var(--text);flex:1">${event.name || event.id}</span>
+            <span style="color:var(--muted);font-size:11px;font-family:var(--mono);margin-right:8px">${event.date ? new Date(event.date).toLocaleDateString() : ''}</span>
             <span style="color:var(--accent);font-size:12px;margin:0 16px">${status}</span>
             <span class="chevron">▼</span>
           </div>
@@ -1798,7 +2015,11 @@ function updateSeriesPreview() {
 }
 
 async function runSim() {
-  const awayPct = parseInt(document.getElementById('sim-away-pct').value) / 100;
+  const awayPct  = parseInt(document.getElementById('sim-away-pct').value) / 100;
+  const awaySeed = parseInt(document.getElementById('sim-away-seed').value) || 0;
+  const homeSeed = parseInt(document.getElementById('sim-home-seed').value) || 0;
+  // Auto-enable playoff mode when seeds are set
+  const isPlayoff = document.getElementById('sim-playoff').checked || awaySeed > 0 || homeSeed > 0;
   const data = {
     sport: document.getElementById('sim-sport').value,
     away_abbr: document.getElementById('sim-away-abbr').value,
@@ -1807,15 +2028,15 @@ async function runSim() {
     home_score: parseInt(document.getElementById('sim-home-score').value),
     away_record: document.getElementById('sim-away-record').value.trim(),
     home_record: document.getElementById('sim-home-record').value.trim(),
-    away_seed: parseInt(document.getElementById('sim-away-seed').value) || 0,
-    home_seed: parseInt(document.getElementById('sim-home-seed').value) || 0,
+    away_seed: awaySeed,
+    home_seed: homeSeed,
     period: parseInt(document.getElementById('sim-period').value),
     clock: document.getElementById('sim-clock').value,
     is_halftime: document.getElementById('sim-halftime').checked,
     is_ot: document.getElementById('sim-ot').checked,
-    is_playoff: document.getElementById('sim-playoff').checked,
-    series_summary: document.getElementById('sim-playoff').checked ? buildSeriesSummary() : '',
-    game_label: document.getElementById('sim-playoff').checked ? buildGameLabel() : '',
+    is_playoff: isPlayoff,
+    series_summary: isPlayoff ? buildSeriesSummary() : '',
+    game_label:     isPlayoff ? buildGameLabel()     : '',
     away_win_pct: awayPct,
     down_distance: document.getElementById('sim-sport').value === 'nfl'
       ? (document.getElementById('sim-down-distance').value.trim() || null) : null,
@@ -2026,6 +2247,612 @@ async function init() {
 }
 
 init();
+</script>
+
+<!-- ── Logo Editor ──────────────────────────────────────────────────────────── -->
+<script>
+// ── State ─────────────────────────────────────────────────────────────────────
+const leState = {
+  sport: 'nba',
+  abbr: null,
+  pixels: null,      // [y][x] = [r,g,b,a]
+  zoom: 16,
+  tool: 'draw',
+  painting: false,
+  undoPushedThisStroke: false,
+  lastPx: null,
+  recentColors: [],
+  initialized: false,
+  undoStack: [],   // max 50 deep copies of pixels
+  redoStack: [],
+  allLogos: {},
+  // selection / move tool state
+  sel: {
+    phase: 'none',   // 'none' | 'drawing' | 'idle' | 'moving'
+    x0: 0, y0: 0, x1: 0, y1: 0,          // selection rect (pixel coords, normalized)
+    floatPixels: null,                      // lifted pixel block
+    floatX: 0, floatY: 0,                  // top-left of float in pixel coords
+    moveAnchorPx: null,                    // pixel coord where move drag started
+    moveAnchorFloat: null,                 // floatX/Y at start of move
+  },
+};
+
+function leInit() {
+  if (!leState.initialized) {
+    leState.initialized = true;
+    leLoadList();
+    leBindCanvas();
+  }
+}
+
+// ── Logo list ─────────────────────────────────────────────────────────────────
+async function leLoadList() {
+  const showOrig = document.getElementById('le-show-originals')?.checked;
+  const url = '/api/logo-editor/list' + (showOrig ? '?include_originals=true' : '');
+  const res = await fetch(url);
+  leState.allLogos = await res.json();
+  leRenderList();
+}
+
+function leToggleOriginals() {
+  leLoadList();
+}
+
+function leSetSport(sport) {
+  leState.sport = sport;
+  document.querySelectorAll('.le-sport-btn').forEach(b =>
+    b.classList.toggle('btn-primary', b.dataset.sport === sport));
+  leRenderList();
+}
+
+function leRenderList() {
+  const logos = (leState.allLogos || {})[leState.sport] || [];
+  const el = document.getElementById('le-logo-list');
+  el.innerHTML = '';
+  logos.forEach(({abbr, sport, is_original}) => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:3px 6px;border-radius:6px;cursor:pointer;border:1px solid transparent;position:relative'
+      + (is_original ? ';opacity:0.6' : '');
+    row.dataset.abbr = abbr;
+    row.onclick = () => leLoadLogo(sport, abbr, row, is_original);
+
+    const imgSrc = is_original
+      ? `/logos/${sport}/${abbr}.original.png?t=${Date.now()}`
+      : `/logos/${sport}/${abbr}.png`;
+    const img = document.createElement('img');
+    img.src = imgSrc;
+    img.style.cssText = 'width:24px;height:24px;image-rendering:pixelated;background:#222;border-radius:3px;flex-shrink:0';
+
+    const lbl = document.createElement('span');
+    lbl.textContent = is_original ? `${abbr} (orig)` : abbr;
+    lbl.style.cssText = 'font-size:12px;font-family:var(--mono);flex:1'
+      + (is_original ? ';color:var(--muted)' : '');
+
+    row.appendChild(img); row.appendChild(lbl);
+    el.appendChild(row);
+  });
+}
+
+async function leLoadLogo(sport, abbr, rowEl, is_original) {
+  document.querySelectorAll('#le-logo-list > div').forEach(r => {
+    r.style.background = ''; r.style.borderColor = 'transparent';
+  });
+  if (rowEl) { rowEl.style.background = 'var(--surface2)'; rowEl.style.borderColor = 'var(--accent)'; }
+
+  leState.sport = sport;
+  leState.abbr  = is_original ? null : abbr;  // prevent saving originals directly
+  leState.sel.phase = 'none';
+  leState.sel.floatPixels = null;
+  const label = is_original ? `${sport.toUpperCase()} / ${abbr} (original — read only)` : `${sport.toUpperCase()} / ${abbr}`;
+  document.getElementById('le-logo-name').textContent = label;
+
+  const url = `/api/logo-editor/pixels/${sport}/${abbr}` + (is_original ? '?variant=original' : '');
+  const res  = await fetch(url);
+  const data = await res.json();
+  if (data.error) { toast(data.error, true); return; }
+
+  leState.pixels    = data.pixels;
+  leState.undoStack = [];
+  leState.redoStack = [];
+  leUpdateUndoButtons();
+  leUpdateCurrentPalette();
+  leRedraw();
+}
+
+
+// ── Canvas binding ────────────────────────────────────────────────────────────
+function leBindCanvas() {
+  const canvas = document.getElementById('le-canvas');
+
+  canvas.addEventListener('mousedown', e => { e.preventDefault(); leMouseDown(e); });
+  canvas.addEventListener('mousemove', e => leMouseMove(e));
+  canvas.addEventListener('mouseup',   e => leMouseUp(e));
+  canvas.addEventListener('mouseleave',() => { leState.painting = false; });
+  canvas.addEventListener('contextmenu', e => { e.preventDefault(); lePickAt(e); });
+
+  // Mouse-wheel zoom (prevent page scroll while over canvas)
+  document.getElementById('le-canvas-wrap').addEventListener('wheel', e => {
+    e.preventDefault();
+    const delta = e.deltaY < 0 ? 2 : -2;
+    leSetZoom(leState.zoom + delta);
+  }, { passive: false });
+
+  // Keyboard shortcuts (only active when Logo Editor page is visible)
+  document.addEventListener('keydown', e => {
+    if (!document.getElementById('page-logoeditor').classList.contains('active')) return;
+    if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') { e.preventDefault(); leUndo(); }
+    if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) { e.preventDefault(); leRedo(); }
+  });
+}
+
+function leMouseDown(e) {
+  if (!leState.pixels) return;
+  leState.painting = true;
+  leState.lastPx   = null;
+  leState.undoPushedThisStroke = false;
+
+  if (leState.tool === 'select') {
+    leSelectMouseDown(e); return;
+  }
+  lePaintAt(e);
+}
+
+function leMouseMove(e) {
+  if (!leState.pixels) return;
+  if (leState.tool === 'select') {
+    leSelectMouseMove(e); return;
+  }
+  if (leState.painting) lePaintAt(e);
+  else leHoverAt(e);
+}
+
+function leMouseUp(e) {
+  if (leState.tool === 'select') {
+    leSelectMouseUp(e);
+  }
+  leState.painting = false;
+  leState.lastPx   = null;
+  // Update palette after any stroke completes
+  if (leState.undoPushedThisStroke) leUpdateCurrentPalette();
+}
+
+// ── Select / Move tool ────────────────────────────────────────────────────────
+function leSelNorm() {
+  const s = leState.sel;
+  return {
+    x0: Math.min(s.x0, s.x1), y0: Math.min(s.y0, s.y1),
+    x1: Math.max(s.x0, s.x1), y1: Math.max(s.y0, s.y1),
+  };
+}
+
+function leInSel(px) {
+  const n = leSelNorm();
+  return px.x >= n.x0 && px.x <= n.x1 && px.y >= n.y0 && px.y <= n.y1;
+}
+
+function leSelectMouseDown(e) {
+  const px = lePixelFromEventUnbounded(e);
+  const s  = leState.sel;
+
+  if (s.phase === 'moving') {
+    // Commit float on second mousedown
+    leStampFloat();
+    leRedraw();
+    return;
+  }
+
+  if (s.phase === 'idle' && px && leInSel(px)) {
+    // Lift pixels and start moving
+    const n = leSelNorm();
+    s.floatPixels = [];
+    s.floatX = n.x0; s.floatY = n.y0;
+    for (let y = n.y0; y <= n.y1; y++) {
+      const row = [];
+      for (let x = n.x0; x <= n.x1; x++) {
+        row.push(leState.pixels[y][x].slice());
+        leState.pixels[y][x] = [0, 0, 0, 0];   // cut
+      }
+      s.floatPixels.push(row);
+    }
+    s.phase = 'moving';
+    s.moveAnchorPx    = px;
+    s.moveAnchorFloat = {x: s.floatX, y: s.floatY};
+    leRedraw();
+    return;
+  }
+
+  // Stamp float if any, then start fresh selection
+  if (s.floatPixels) leStampFloat();
+
+  if (px) {
+    s.phase = 'drawing';
+    s.x0 = s.x1 = px.x;
+    s.y0 = s.y1 = px.y;
+  } else {
+    s.phase = 'none';
+  }
+  leRedraw();
+}
+
+function leSelectMouseMove(e) {
+  const px = lePixelFromEventUnbounded(e);
+  const s  = leState.sel;
+
+  if (s.phase === 'drawing' && px) {
+    s.x1 = px.x; s.y1 = px.y;
+    leRedraw();
+    return;
+  }
+
+  if (s.phase === 'moving' && px) {
+    const dx = px.x - s.moveAnchorPx.x;
+    const dy = px.y - s.moveAnchorPx.y;
+    s.floatX = s.moveAnchorFloat.x + dx;
+    s.floatY = s.moveAnchorFloat.y + dy;
+    leRedraw();
+    return;
+  }
+
+  // Update cursor hint
+  if (s.phase === 'idle' && px) {
+    document.getElementById('le-canvas').style.cursor = leInSel(px) ? 'move' : 'crosshair';
+  }
+  leHoverAt(e);
+}
+
+function leSelectMouseUp(e) {
+  const s = leState.sel;
+  if (s.phase === 'drawing') {
+    const px = lePixelFromEventUnbounded(e);
+    if (px) { s.x1 = px.x; s.y1 = px.y; }
+    s.phase = 'idle';
+    leRedraw();
+  } else if (s.phase === 'moving') {
+    leStampFloat();
+    leRedraw();
+  }
+  leState.painting = false;
+}
+
+function leStampFloat() {
+  const s = leState.sel;
+  if (!s.floatPixels) return;
+  lePushUndo();
+  const fh = s.floatPixels.length;
+  const fw = fh ? s.floatPixels[0].length : 0;
+  const ph = leState.pixels.length;
+  const pw = ph ? leState.pixels[0].length : 0;
+  for (let dy = 0; dy < fh; dy++) {
+    for (let dx = 0; dx < fw; dx++) {
+      const ty = s.floatY + dy, tx = s.floatX + dx;
+      if (ty >= 0 && ty < ph && tx >= 0 && tx < pw) {
+        leState.pixels[ty][tx] = s.floatPixels[dy][dx].slice();
+      }
+    }
+  }
+  // Update selection rect to where the float landed
+  s.x0 = s.floatX; s.y0 = s.floatY;
+  s.x1 = s.floatX + fw - 1; s.y1 = s.floatY + fh - 1;
+  s.floatPixels = null;
+  s.phase = 'idle';
+}
+
+// ── Zoom ──────────────────────────────────────────────────────────────────────
+function leZoomChange() {
+  leSetZoom(parseInt(document.getElementById('le-zoom').value));
+}
+
+function leSetZoom(z) {
+  z = Math.max(4, Math.min(64, z));
+  leState.zoom = z;
+  const slider = document.getElementById('le-zoom');
+  if (slider) slider.value = z;
+  document.getElementById('le-zoom-val').textContent = z + '×';
+  leRedraw();
+}
+
+function leAlphaChange() {
+  document.getElementById('le-alpha-val').textContent = document.getElementById('le-alpha').value;
+}
+
+function leSetTool(tool) {
+  // Stamp float before switching away from select
+  if (leState.tool === 'select' && tool !== 'select' && leState.sel.floatPixels) {
+    leStampFloat(); leRedraw();
+  }
+  if (tool !== 'select') { leState.sel.phase = 'none'; leState.sel.floatPixels = null; }
+  leState.tool = tool;
+  document.querySelectorAll('.le-tool-btn').forEach(b => b.classList.toggle('active', b.dataset.tool === tool));
+  document.getElementById('le-canvas').style.cursor =
+    tool === 'eyedrop' ? 'cell' :
+    tool === 'fill'    ? 'cell' :
+    tool === 'select'  ? 'crosshair' : 'crosshair';
+}
+
+// ── Drawing helpers ───────────────────────────────────────────────────────────
+function leGetColor() {
+  const hex = document.getElementById('le-color').value;
+  const a   = parseInt(document.getElementById('le-alpha').value);
+  return [parseInt(hex.slice(1,3),16), parseInt(hex.slice(3,5),16), parseInt(hex.slice(5,7),16), a];
+}
+
+function lePixelFromEvent(e) {
+  const p = lePixelFromEventUnbounded(e);
+  if (!p) return null;
+  const h = leState.pixels ? leState.pixels.length : 0;
+  const w = h ? leState.pixels[0].length : 0;
+  if (p.x < 0 || p.y < 0 || p.x >= w || p.y >= h) return null;
+  return p;
+}
+
+function lePixelFromEventUnbounded(e) {
+  const canvas = document.getElementById('le-canvas');
+  const rect   = canvas.getBoundingClientRect();
+  const z      = leState.zoom;
+  return {
+    x: Math.floor((e.clientX - rect.left) / z),
+    y: Math.floor((e.clientY - rect.top)  / z),
+  };
+}
+
+function lePaintAt(e) {
+  const px = lePixelFromEvent(e);
+  if (!px) return;
+  if (leState.lastPx && leState.lastPx.x === px.x && leState.lastPx.y === px.y) return;
+  leState.lastPx = px;
+
+  if (leState.tool === 'eyedrop') { lePickAt(e); return; }
+  if (leState.tool === 'fill') {
+    lePushUndo();
+    leFill(px.x, px.y, leGetColor());
+    leRedraw(); return;
+  }
+
+  if (!leState.undoPushedThisStroke) {
+    lePushUndo();
+    leState.undoPushedThisStroke = true;
+    if (leState.tool !== 'erase') leAddRecent(document.getElementById('le-color').value);
+  }
+  leState.pixels[px.y][px.x] = leState.tool === 'erase' ? [0,0,0,0] : leGetColor();
+  leRedraw();
+}
+
+function lePickAt(e) {
+  const px = lePixelFromEvent(e);
+  if (!px || !leState.pixels) return;
+  const [r, g, b, a] = leState.pixels[px.y][px.x];
+  const hex = '#' + [r,g,b].map(v => v.toString(16).padStart(2,'0')).join('');
+  document.getElementById('le-color').value   = hex;
+  document.getElementById('le-alpha').value   = a;
+  document.getElementById('le-alpha-val').textContent = a;
+  leAddRecent(hex);
+  if (leState.tool === 'eyedrop') leSetTool('draw');
+}
+
+function leHoverAt(e) {
+  const px = lePixelFromEvent(e);
+  if (!px || !leState.pixels) return;
+  const [r,g,b,a] = leState.pixels[px.y][px.x];
+  document.getElementById('le-statusbar').textContent = `(${px.x}, ${px.y})  rgba(${r}, ${g}, ${b}, ${a})`;
+}
+
+function leFill(sx, sy, newColor) {
+  const pixels = leState.pixels;
+  const h = pixels.length, w = pixels[0].length;
+  const target = pixels[sy][sx].slice();
+  if (target.join() === newColor.join()) return;
+  const stack = [[sx, sy]];
+  const visited = new Uint8Array(w * h);
+  while (stack.length) {
+    const [x, y] = stack.pop();
+    if (x < 0 || y < 0 || x >= w || y >= h) continue;
+    if (visited[y * w + x]) continue;
+    if (pixels[y][x].join() !== target.join()) continue;
+    visited[y * w + x] = 1;
+    pixels[y][x] = newColor.slice();
+    stack.push([x+1,y],[x-1,y],[x,y+1],[x,y-1]);
+  }
+}
+
+// ── Redraw ────────────────────────────────────────────────────────────────────
+function leRedraw() {
+  const canvas = document.getElementById('le-canvas');
+  const pixels = leState.pixels;
+  if (!pixels) return;
+  const h = pixels.length, w = pixels[0].length;
+  const z = leState.zoom;
+  const showGrid     = document.getElementById('le-grid').checked;
+  const showChecker  = document.getElementById('le-checkerboard').checked;
+
+  canvas.width  = w * z;
+  canvas.height = h * z;
+  const ctx = canvas.getContext('2d');
+
+  // Base pixels
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const [r, g, b, a] = pixels[y][x];
+      if (showChecker && a < 255) {
+        ctx.fillStyle = ((x + y) % 2 === 0) ? '#666' : '#444';
+        ctx.fillRect(x * z, y * z, z, z);
+      }
+      if (a > 0) {
+        ctx.fillStyle = `rgba(${r},${g},${b},${a/255})`;
+        ctx.fillRect(x * z, y * z, z, z);
+      }
+    }
+  }
+
+  // Grid
+  if (showGrid && z >= 4) {
+    ctx.strokeStyle = 'rgba(255,255,255,0.12)';
+    ctx.lineWidth = 0.5;
+    for (let x = 0; x <= w; x++) { ctx.beginPath(); ctx.moveTo(x*z,0); ctx.lineTo(x*z,h*z); ctx.stroke(); }
+    for (let y = 0; y <= h; y++) { ctx.beginPath(); ctx.moveTo(0,y*z); ctx.lineTo(w*z,y*z); ctx.stroke(); }
+  }
+
+  // Floating selection
+  const s = leState.sel;
+  if (s.floatPixels) {
+    const fh = s.floatPixels.length, fw = fh ? s.floatPixels[0].length : 0;
+    for (let dy = 0; dy < fh; dy++) {
+      for (let dx = 0; dx < fw; dx++) {
+        const [r,g,b,a] = s.floatPixels[dy][dx];
+        const cx = (s.floatX + dx) * z, cy = (s.floatY + dy) * z;
+        if (a > 0) {
+          ctx.fillStyle = `rgba(${r},${g},${b},${a/255})`;
+          ctx.fillRect(cx, cy, z, z);
+        }
+      }
+    }
+    // Float border
+    ctx.strokeStyle = 'rgba(100,180,255,0.9)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 2]);
+    ctx.strokeRect(s.floatX * z, s.floatY * z, fw * z, fh * z);
+    ctx.setLineDash([]);
+  }
+
+  // Selection rectangle overlay
+  if (s.phase === 'drawing' || s.phase === 'idle') {
+    const n = leSelNorm();
+    ctx.strokeStyle = 'rgba(100,180,255,0.9)';
+    ctx.lineWidth = 1.5;
+    ctx.setLineDash([3, 2]);
+    ctx.strokeRect(n.x0 * z, n.y0 * z, (n.x1 - n.x0 + 1) * z, (n.y1 - n.y0 + 1) * z);
+    ctx.fillStyle = 'rgba(100,180,255,0.08)';
+    ctx.fillRect(n.x0 * z, n.y0 * z, (n.x1 - n.x0 + 1) * z, (n.y1 - n.y0 + 1) * z);
+    ctx.setLineDash([]);
+  }
+}
+
+// ── Recent colors ─────────────────────────────────────────────────────────────
+function leAddRecent(hex) {
+  leState.recentColors = [hex, ...leState.recentColors.filter(c => c !== hex)].slice(0, 16);
+  leRenderPalette();
+}
+
+function leRenderPalette() {
+  const el = document.getElementById('le-palette');
+  el.innerHTML = '';
+  leState.recentColors.forEach(hex => {
+    const s = document.createElement('div');
+    s.style.cssText = `width:20px;height:20px;border-radius:4px;background:${hex};cursor:pointer;border:1px solid rgba(255,255,255,0.15)`;
+    s.title = hex;
+    s.onclick = () => { document.getElementById('le-color').value = hex; };
+    el.appendChild(s);
+  });
+}
+
+// ── Undo / Redo ───────────────────────────────────────────────────────────────
+function lePushUndo() {
+  if (!leState.pixels) return;
+  leState.undoStack.push(leState.pixels.map(r => r.map(p => p.slice())));
+  if (leState.undoStack.length > 50) leState.undoStack.shift();
+  leState.redoStack = [];
+  leUpdateUndoButtons();
+}
+
+function leUndo() {
+  if (!leState.undoStack.length) return;
+  leState.redoStack.push(leState.pixels.map(r => r.map(p => p.slice())));
+  leState.pixels = leState.undoStack.pop();
+  leUpdateUndoButtons();
+  leUpdateCurrentPalette();
+  leRedraw();
+}
+
+function leRedo() {
+  if (!leState.redoStack.length) return;
+  leState.undoStack.push(leState.pixels.map(r => r.map(p => p.slice())));
+  leState.pixels = leState.redoStack.pop();
+  leUpdateUndoButtons();
+  leUpdateCurrentPalette();
+  leRedraw();
+}
+
+function leUpdateUndoButtons() {
+  const u = document.getElementById('le-undo-btn');
+  const r = document.getElementById('le-redo-btn');
+  if (u) u.disabled = leState.undoStack.length === 0;
+  if (r) r.disabled = leState.redoStack.length === 0;
+}
+
+// ── Current palette ───────────────────────────────────────────────────────────
+function leUpdateCurrentPalette() {
+  const el = document.getElementById('le-cur-palette');
+  if (!el || !leState.pixels) return;
+  const freq = {};
+  for (const row of leState.pixels) {
+    for (const [r, g, b, a] of row) {
+      if (a === 0) continue;
+      const key = `${r},${g},${b}`;
+      freq[key] = (freq[key] || 0) + 1;
+    }
+  }
+  const sorted = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 28);
+  if (!sorted.length) { el.innerHTML = '<span style="font-size:11px;color:var(--muted)">—</span>'; return; }
+  el.innerHTML = '';
+  sorted.forEach(([key]) => {
+    const [r, g, b] = key.split(',');
+    const hex = '#' + [r, g, b].map(v => parseInt(v).toString(16).padStart(2, '0')).join('');
+    const sw = document.createElement('div');
+    sw.style.cssText = `width:18px;height:18px;border-radius:3px;background:${hex};cursor:pointer;border:1px solid rgba(255,255,255,0.15)`;
+    sw.title = hex;
+    sw.onclick = () => { document.getElementById('le-color').value = hex; };
+    el.appendChild(sw);
+  });
+}
+
+// ── Save / Set Default / Reset Default ───────────────────────────────────────
+async function leSave() {
+  if (!leState.abbr || !leState.pixels) { toast('No logo loaded', true); return; }
+  if (leState.sel.floatPixels) { leStampFloat(); leRedraw(); }
+  const res = await fetch(`/api/logo-editor/save/${leState.sport}/${leState.abbr}`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({pixels: leState.pixels}),
+  });
+  const d = await res.json();
+  if (d.ok) {
+    toast('Saved — board updates on next frame');
+    leRefreshThumb(leState.sport, leState.abbr);
+    await leLoadList();
+  } else {
+    toast(d.error || 'Save failed', true);
+  }
+}
+
+async function leResetDefault() {
+  if (!leState.abbr) { toast('No logo loaded', true); return; }
+  // Load original pixels
+  const res = await fetch(`/api/logo-editor/reset-default/${leState.sport}/${leState.abbr}`, {method:'POST'});
+  const d   = await res.json();
+  if (!d.ok) { toast(d.error || 'No default saved', true); return; }
+  lePushUndo();
+  leState.pixels = d.pixels;
+  leUpdateCurrentPalette();
+  leRedraw();
+  // Save the original pixels back to disk so the board updates immediately
+  const sport = leState.sport, abbr = leState.abbr;
+  const saveRes = await fetch(`/api/logo-editor/save/${sport}/${abbr}`, {
+    method: 'POST',
+    headers: {'Content-Type': 'application/json'},
+    body: JSON.stringify({pixels: leState.pixels}),
+  });
+  const sd = await saveRes.json();
+  if (sd.ok) {
+    leRefreshThumb(sport, abbr);
+    toast('Reset to default — board updated');
+  } else {
+    toast('Pixels reset in editor (save failed: ' + (sd.error || 'unknown') + ')', true);
+  }
+}
+
+function leRefreshThumb(sport, abbr) {
+  const img = document.querySelector(`#le-logo-list img[src^="/logos/${sport}/${abbr}.png"]`);
+  if (img) img.src = `/logos/${sport}/${abbr}.png?t=${Date.now()}`;
+}
 </script>
 
 <!-- Monaco Editor -->

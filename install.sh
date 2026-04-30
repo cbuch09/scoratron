@@ -111,6 +111,6 @@ systemctl restart scoratron scoratron-web
 
 echo ""
 echo "==> Scoratron installed successfully!"
-echo "    Web UI : http://$(hostname -I | awk '{print $1}'):5000"
+echo "    Web UI : http://$(hostname -I | awk '{print $1}')"
 echo "    Logs   : journalctl -u scoratron -f"
 echo ""
