@@ -1,0 +1,19 @@
+[Unit]
+Description=Scoratron WiFi Setup Check
+# Run after NetworkManager has started, but don't require connectivity
+After=NetworkManager.service
+Wants=NetworkManager.service
+# Ensure this completes before the main display service starts
+Before=scoratron.service scoratron-web.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/home/admin/scoratron/wifi_setup/check_wifi.sh
+StandardOutput=journal
+StandardError=journal
+# Run as root — needs ip/nmcli/hostapd access
+User=root
+
+[Install]
+WantedBy=multi-user.target
