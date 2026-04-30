@@ -56,6 +56,11 @@ def save_settings(s):
     with open(SETTINGS_FILE, 'w') as f:
         json.dump(s, f, indent=2)
 
+def init_settings():
+    """Write default settings on first run so the file always exists."""
+    if not os.path.exists(SETTINGS_FILE):
+        save_settings(DEFAULT_SETTINGS.copy())
+
 # ── Cache ──────────────────────────────────────────────────────────────────
 cache = {
     'games': [],
@@ -791,6 +796,7 @@ def logo_editor_delete(sport, abbr):
     return jsonify({'ok': True})
 
 if __name__ == '__main__':
+    init_settings()
     _ensure_all_originals()
     fetch_all()
     app.run(host='0.0.0.0', port=80, debug=False)
