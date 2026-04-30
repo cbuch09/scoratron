@@ -253,9 +253,9 @@ class ScoreFetcher:
                 if away_wins == home_wins:
                     series_summary = f"Tied {away_wins}-{home_wins}"
                 elif away_wins > home_wins:
-                    series_summary = f"{away.abbreviation} leads {away_wins}-{home_wins}"
+                    series_summary = f"{away.abbreviation} {away_wins}-{home_wins}"
                 else:
-                    series_summary = f"{home.abbreviation} leads {home_wins}-{away_wins}"
+                    series_summary = f"{home.abbreviation} {home_wins}-{away_wins}"
                 game_label = f"Game {total + 1}" if total < 7 else "Game 7"
 
             # Check notes for named games like Super Bowl

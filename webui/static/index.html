@@ -1003,9 +1003,9 @@ pre {
         <input type="text" id="sim-away-record" value="" maxlength="8" placeholder="optional"
                style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:14px;padding:8px 12px;outline:none;">
       </div>
-      <div class="form-group">
+      <div class="form-group sim-seed-field" style="display:none">
         <label class="form-label">Playoff Seed</label>
-        <input type="number" id="sim-away-seed" value="0" min="0" max="8">
+        <input type="number" id="sim-away-seed" value="1" min="1" max="8">
       </div>
       <div class="btn-row" style="margin-top:12px">
         <button class="btn btn-secondary" onclick="flashScore('away')" style="font-size:11px;padding:6px 12px">Flash Score</button>
@@ -1027,9 +1027,9 @@ pre {
         <input type="text" id="sim-home-record" value="" maxlength="8" placeholder="optional"
                style="width:100%;background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:var(--mono);font-size:14px;padding:8px 12px;outline:none;">
       </div>
-      <div class="form-group">
+      <div class="form-group sim-seed-field" style="display:none">
         <label class="form-label">Playoff Seed</label>
-        <input type="number" id="sim-home-seed" value="0" min="0" max="8">
+        <input type="number" id="sim-home-seed" value="1" min="1" max="8">
       </div>
       <div class="btn-row" style="margin-top:12px">
         <button class="btn btn-secondary" onclick="flashScore('home')" style="font-size:11px;padding:6px 12px">Flash Score</button>
@@ -2090,6 +2090,7 @@ let simAwayWins = 0, simHomeWins = 0;
 function toggleSimPlayoff() {
   const on = document.getElementById('sim-playoff').checked;
   document.getElementById('sim-series-section').style.display = on ? 'block' : 'none';
+  document.querySelectorAll('.sim-seed-field').forEach(el => el.style.display = on ? '' : 'none');
 }
 
 function adjustWins(side, delta) {
@@ -2119,11 +2120,10 @@ function updateSeriesPreview() {
 }
 
 async function runSim() {
-  const awayPct  = parseInt(document.getElementById('sim-away-pct').value) / 100;
-  const awaySeed = parseInt(document.getElementById('sim-away-seed').value) || 0;
-  const homeSeed = parseInt(document.getElementById('sim-home-seed').value) || 0;
-  // Auto-enable playoff mode when seeds are set
-  const isPlayoff = document.getElementById('sim-playoff').checked || awaySeed > 0 || homeSeed > 0;
+  const awayPct   = parseInt(document.getElementById('sim-away-pct').value) / 100;
+  const isPlayoff = document.getElementById('sim-playoff').checked;
+  const awaySeed  = isPlayoff ? (parseInt(document.getElementById('sim-away-seed').value) || 1) : 0;
+  const homeSeed  = isPlayoff ? (parseInt(document.getElementById('sim-home-seed').value) || 1) : 0;
   const data = {
     sport: document.getElementById('sim-sport').value,
     away_abbr: document.getElementById('sim-away-abbr').value,
