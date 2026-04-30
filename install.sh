@@ -53,17 +53,9 @@ fi
 
 # ── 5. Logo directories ───────────────────────────────────────────────────────
 echo "==> Creating logo directories..."
-mkdir -p "$INSTALL_DIR/logos/nba"
-mkdir -p "$INSTALL_DIR/logos/nfl"
 mkdir -p "$INSTALL_DIR/logos/nba_web"
 mkdir -p "$INSTALL_DIR/logos/nfl_web"
-
-# ── 6. Download logos (skip with --no-logos) ──────────────────────────────────
-if [[ "$*" != *--no-logos* ]]; then
-    echo "==> Downloading logos (this may take a minute)..."
-    "$VENV_DIR/bin/python3" "$INSTALL_DIR/download_logos.py" || \
-        echo "    WARNING: logo download failed — run download_logos.py manually."
-fi
+# logos/nba and logos/nfl are included in the repo — no download needed
 
 # ── 7. systemd service files ──────────────────────────────────────────────────
 echo "==> Installing systemd services..."
