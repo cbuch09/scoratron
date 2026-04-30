@@ -92,12 +92,12 @@ class ScoreFetcher:
         if live:
             return live
 
-        # No live games — show most recent finished, but skip stale post-season
+        # No live games — show all finished games so the display can scroll through them
         finished = [g for g in games if g.status == "post"]
         if finished:
             non_stale = [g for g in finished if g.sport == "nba" or not g.is_playoff]
             if non_stale:
-                return non_stale[:1]
+                return non_stale
 
         # No live or recent finished — show upcoming games within 60 minutes
         upcoming = [g for g in games if g.status == "pre"]
@@ -170,8 +170,6 @@ class ScoreFetcher:
                     timeouts = 0  # ESPN doesn't provide NBA timeout data
 
                 # NFL penalties / NBA team fouls
-                fouls = 0
-                stats = c.get("statistics", [])
                 fouls = 0
                 stats = c.get("statistics", [])
                 for stat in stats:

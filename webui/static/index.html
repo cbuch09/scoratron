@@ -676,6 +676,106 @@ pre {
 .tree-children { padding-left: 14px; }
 .dir-arrow { transition: transform 0.15s; display: inline-block; font-size: 9px; color: #404060; }
 .tree-dir.open > .tree-item .dir-arrow { transform: rotate(90deg); }
+
+/* ── Mobile ──────────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+  /* Code editor: stack tree above editor */
+  .code-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: auto 1fr;
+    height: calc(100vh - 132px);
+  }
+  .code-tree {
+    max-height: 160px;
+    overflow-y: auto;
+  }
+  #code-tree-toggle {
+    display: inline-flex !important;
+  }
+  .code-tree.collapsed {
+    max-height: 0;
+    padding: 0;
+    overflow: hidden;
+    border: none;
+  }
+
+  /* Logo editor: stack vertically */
+  #le-layout {
+    flex-direction: column !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  #le-sidebar {
+    width: 100% !important;
+    min-width: unset !important;
+    border-right: none !important;
+    border-bottom: 1px solid var(--border);
+    max-height: 110px;
+    flex-shrink: 0;
+  }
+  #le-sidebar > div:first-child {
+    padding: 6px 8px 4px !important;
+  }
+  #le-sidebar > div:first-child > div:first-child {
+    margin-bottom: 4px !important;
+  }
+  #le-logo-list {
+    flex-direction: row !important;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    padding: 4px 8px !important;
+    gap: 6px !important;
+    align-items: center;
+  }
+  #le-logo-list > div {
+    flex-direction: column !important;
+    align-items: center !important;
+    min-width: 40px !important;
+    padding: 4px !important;
+    gap: 2px !important;
+  }
+  #le-logo-list > div img {
+    width: 28px !important;
+    height: 28px !important;
+  }
+  #le-logo-list > div span {
+    font-size: 10px !important;
+  }
+  /* Tools panel: hidden by default on mobile, toggled by button */
+  #le-tools-panel {
+    width: 100% !important;
+    min-width: unset !important;
+    border-left: none !important;
+    border-top: 1px solid var(--border);
+    display: none;
+    flex-direction: row !important;
+    flex-wrap: wrap;
+    padding: 10px !important;
+    gap: 10px !important;
+    max-height: 280px;
+    overflow-y: auto;
+  }
+  #le-tools-panel.mobile-open {
+    display: flex !important;
+  }
+  #le-tools-panel > div {
+    min-width: 140px;
+    flex: 1;
+  }
+  #le-tools-panel > div:last-child {
+    margin-top: 0 !important;
+  }
+  #le-tools-toggle {
+    display: inline-flex !important;
+  }
+  /* Canvas area fills remaining space */
+  #le-canvas-area {
+    min-height: 260px;
+  }
+  #le-canvas-wrap {
+    min-height: 220px;
+  }
+}
 </style>
 </head>
 <body>
@@ -1112,7 +1212,10 @@ pre {
     </div>
     <div class="code-editor-panel">
       <div class="code-editor-toolbar">
-        <span id="code-filename" style="color:#606080">Select a file to edit</span>
+        <div class="flex-row" style="gap:8px;align-items:center">
+          <button id="code-tree-toggle" onclick="toggleCodeTree()" class="btn" style="display:none;font-size:11px;padding:4px 10px">Files ▾</button>
+          <span id="code-filename" style="color:#606080">Select a file to edit</span>
+        </div>
         <div class="flex-row" style="gap:8px">
           <span id="code-save-status" style="font-family:var(--mono);font-size:11px;color:#404060"></span>
           <button class="btn btn-primary" id="code-save-btn" onclick="saveCodeFile()" disabled style="padding:6px 14px">Save</button>
@@ -1142,7 +1245,7 @@ pre {
     </div>
 
     <!-- Center: canvas -->
-    <div style="flex:1;display:flex;flex-direction:column;overflow:hidden">
+    <div id="le-canvas-area" style="flex:1;display:flex;flex-direction:column;overflow:hidden">
       <div style="padding:8px 12px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:12px;flex-wrap:wrap">
         <span id="le-logo-name" style="font-weight:600;font-size:14px;min-width:60px">No logo</span>
         <label style="font-size:12px;color:var(--muted)">Zoom
@@ -1155,6 +1258,7 @@ pre {
         <label style="font-size:12px;color:var(--muted)">
           <input type="checkbox" id="le-checkerboard" checked onchange="leRedraw()"> Alpha BG
         </label>
+        <button id="le-tools-toggle" onclick="leToggleToolsPanel()" class="btn" style="display:none;font-size:11px;padding:4px 10px;margin-left:auto">Tools ▾</button>
       </div>
       <div id="le-canvas-wrap" style="flex:1;overflow:auto;padding:16px;display:flex;align-items:flex-start;justify-content:flex-start">
         <canvas id="le-canvas" style="cursor:crosshair;image-rendering:pixelated"></canvas>
@@ -1163,7 +1267,7 @@ pre {
     </div>
 
     <!-- Right: tools -->
-    <div style="width:210px;min-width:180px;border-left:1px solid var(--border);padding:14px 12px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;flex-shrink:0">
+    <div id="le-tools-panel" style="width:210px;min-width:180px;border-left:1px solid var(--border);padding:14px 12px;display:flex;flex-direction:column;gap:14px;overflow-y:auto;flex-shrink:0">
 
       <!-- Color picker -->
       <div>
@@ -2370,6 +2474,36 @@ function leBindCanvas() {
   canvas.addEventListener('mouseleave',() => { leState.painting = false; });
   canvas.addEventListener('contextmenu', e => { e.preventDefault(); lePickAt(e); });
 
+  // Touch support for mobile drawing
+  function touchToMouse(e) {
+    const t = e.touches[0] || e.changedTouches[0];
+    return { clientX: t.clientX, clientY: t.clientY, preventDefault: () => e.preventDefault() };
+  }
+  canvas.addEventListener('touchstart',  e => { e.preventDefault(); leMouseDown(touchToMouse(e)); }, { passive: false });
+  canvas.addEventListener('touchmove',   e => { e.preventDefault(); leMouseMove(touchToMouse(e)); }, { passive: false });
+  canvas.addEventListener('touchend',    e => { e.preventDefault(); leMouseUp(touchToMouse(e));   }, { passive: false });
+  canvas.addEventListener('touchcancel', e => { leState.painting = false; });
+
+  // Pinch-to-zoom on canvas
+  let lastPinchDist = null;
+  canvas.addEventListener('touchstart', e => {
+    if (e.touches.length === 2) lastPinchDist = Math.hypot(
+      e.touches[0].clientX - e.touches[1].clientX,
+      e.touches[0].clientY - e.touches[1].clientY
+    );
+  }, { passive: true });
+  canvas.addEventListener('touchmove', e => {
+    if (e.touches.length === 2 && lastPinchDist) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const delta = dist - lastPinchDist;
+      if (Math.abs(delta) > 4) { leSetZoom(leState.zoom + (delta > 0 ? 2 : -2)); lastPinchDist = dist; }
+    }
+  }, { passive: true });
+  canvas.addEventListener('touchend', () => { lastPinchDist = null; });
+
   // Mouse-wheel zoom (prevent page scroll while over canvas)
   document.getElementById('le-canvas-wrap').addEventListener('wheel', e => {
     e.preventDefault();
@@ -2383,6 +2517,20 @@ function leBindCanvas() {
     if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key === 'z') { e.preventDefault(); leUndo(); }
     if ((e.ctrlKey || e.metaKey) && (e.key === 'y' || (e.shiftKey && e.key === 'Z'))) { e.preventDefault(); leRedo(); }
   });
+}
+
+function leToggleToolsPanel() {
+  const panel = document.getElementById('le-tools-panel');
+  const btn   = document.getElementById('le-tools-toggle');
+  const open  = panel.classList.toggle('mobile-open');
+  btn.textContent = open ? 'Tools ▴' : 'Tools ▾';
+}
+
+function toggleCodeTree() {
+  const tree = document.getElementById('code-tree');
+  const btn  = document.getElementById('code-tree-toggle');
+  const collapsed = tree.classList.toggle('collapsed');
+  btn.textContent = collapsed ? 'Files ▾' : 'Files ▴';
 }
 
 function leMouseDown(e) {

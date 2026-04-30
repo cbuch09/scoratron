@@ -494,12 +494,14 @@ class ScoreBugRenderer:
             color = COLOR_CLOCK
 
         # Override with game label for special games (Super Bowl, Game 7 etc)
-        if game.is_playoff and game.game_label and not game.is_live:
+        game_label_active = game.is_playoff and game.game_label and not game.is_live
+        if game_label_active:
             label = game.game_label[:8]
             color = (180, 0, 255)
 
         w = text_width(label, FONT)
-        draw.text((CX - w//2, 1), label, font=FONT, fill=color)
+        y = 0 if game_label_active else 1
+        draw.text((CX - w//2, y), label, font=FONT, fill=color)
 
     def _draw_scores(self, draw, game):
         """Big pixel scores. Away left, home right, dash center."""

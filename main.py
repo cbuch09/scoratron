@@ -74,7 +74,7 @@ def write_weather_preview(weather):
         print(f'[preview] weather write error: {e}')
 
 def load_webui_settings():
-    path = '/tmp/scoratron_settings.json'
+    path = '/home/admin/scoratron/settings.json'
     try:
         if os.path.exists(path):
             with open(path) as f:

@@ -89,36 +89,6 @@ def load_logo(abbr, sport):
     return img
 
 
-def build_parade_strip(teams, sport):
-    """Build a wide image with all logos laid out side by side."""
-    total_width = len(teams) * ITEM_WIDTH + MATRIX_COLS
-    strip = Image.new("RGB", (total_width, MATRIX_ROWS), (0, 0, 0))
-    draw  = ImageDraw.Draw(strip)
-
-    for i, abbr in enumerate(teams):
-        x = i * ITEM_WIDTH + MATRIX_COLS  # start offscreen right
-        logo = load_logo(abbr, sport)
-
-        # Center logo vertically in top portion
-        logo_y = (LOGO_SIZE - LOGO_SIZE) // 2   # = 0
-        strip.paste(logo, (x, logo_y))
-
-        # Draw abbreviation below logo
-        try:
-            bbox = FONT.getbbox(abbr)
-            tw = bbox[2] - bbox[0]
-        except Exception:
-            tw = len(abbr) * 5
-        tx = x + (LOGO_SIZE - tw) // 2
-        color = TEAM_COLORS.get(abbr, (160, 160, 160))
-        # Lighten very dark colors for readability
-        r, g, b = color
-        if r + g + b < 60:
-            color = (120, 120, 120)
-        draw.text((tx, LABEL_Y), abbr, font=FONT, fill=color)
-
-    return strip, total_width
-
 
 def run_parade(sport="nba", brightness=60, loop=True):
     """Run the logo parade on the matrix."""

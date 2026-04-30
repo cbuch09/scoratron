@@ -9,7 +9,6 @@ import sys
 import json
 import time
 import glob as glob_mod
-import threading
 import subprocess
 from datetime import datetime
 from flask import Flask, jsonify, request, send_from_directory
@@ -29,7 +28,7 @@ from models import GameState, TeamInfo
 app = Flask(__name__, static_folder='static')
 
 CERT = '/etc/ssl/certs/ca-certificates.crt'
-SETTINGS_FILE = '/tmp/scoratron_settings.json'
+SETTINGS_FILE = '/home/admin/scoratron/settings.json'
 SIM_FILE = '/tmp/scoratron_sim.json'
 PARADE_FILE = '/tmp/scoratron_parade.json'
 
