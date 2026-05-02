@@ -1129,6 +1129,7 @@ pre {
     <button class="btn btn-secondary" onclick="osUpdate()">Update Package Lists</button>
     <button class="btn btn-secondary" onclick="osUpgrade()">Upgrade OS</button>
   </div>
+  <pre id="os-terminal" style="display:none;margin-top:14px;background:#0a0a0f;border:1px solid var(--border);border-radius:6px;padding:12px 14px;font-family:var(--mono);font-size:11px;color:#c0c0d0;max-height:220px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;line-height:1.5"></pre>
 </div>
 
 <!-- ── WEATHER ── -->
@@ -2015,24 +2016,33 @@ async function loadSysInfo() {
   } catch(e) { console.error(e); }
 }
 
-async function osUpdate() {
-  toast('Updating package lists…');
+async function streamAptCommand(url, label) {
+  const term = document.getElementById('os-terminal');
+  term.style.display = 'block';
+  term.textContent = `$ ${label}\n`;
   try {
-    const r = await fetch('/api/system/update', {method:'POST'});
-    const d = await r.json();
-    toast(d.msg || (d.ok ? 'Done' : d.error), !d.ok);
-    if (d.ok) setTimeout(loadSysInfo, 4000);
-  } catch(e) { toast('Failed', true); }
+    const r = await fetch(url, {method: 'POST'});
+    const reader = r.body.getReader();
+    const decoder = new TextDecoder();
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      term.textContent += decoder.decode(value, {stream: true});
+      term.scrollTop = term.scrollHeight;
+    }
+    setTimeout(loadSysInfo, 2000);
+  } catch(e) {
+    term.textContent += `\n[error: ${e}]\n`;
+  }
+}
+
+async function osUpdate() {
+  await streamAptCommand('/api/system/update', 'apt-get update');
 }
 
 async function osUpgrade() {
   if (!confirm('Upgrade all packages? This may take several minutes.')) return;
-  toast('Upgrade started — this may take a while…');
-  try {
-    const r = await fetch('/api/system/upgrade', {method:'POST'});
-    const d = await r.json();
-    toast(d.msg || (d.ok ? 'Done' : d.error), !d.ok);
-  } catch(e) { toast('Failed', true); }
+  await streamAptCommand('/api/system/upgrade', 'apt-get upgrade -y');
 }
 
 async function restartService() {

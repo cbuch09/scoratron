@@ -11,7 +11,7 @@ import time
 import glob as glob_mod
 import subprocess
 from datetime import datetime, timezone, timedelta
-from flask import Flask, jsonify, request, send_from_directory
+from flask import Flask, jsonify, request, send_from_directory, Response, stream_with_context
 import requests as req
 try:
     from PIL import Image
@@ -253,29 +253,30 @@ def api_sysinfo():
         'updates_available': updates,
     })
 
+def _stream_apt(cmd):
+    """Stream stdout+stderr of an apt command line by line."""
+    def generate():
+        try:
+            env = {'DEBIAN_FRONTEND': 'noninteractive', 'PATH': '/usr/bin:/bin'}
+            proc = subprocess.Popen(
+                cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, bufsize=1, env=env
+            )
+            for line in proc.stdout:
+                yield line.rstrip() + '\n'
+            proc.wait()
+            yield f'\n[exited with code {proc.returncode}]\n'
+        except Exception as e:
+            yield f'[error: {e}]\n'
+    return Response(stream_with_context(generate()), mimetype='text/plain')
+
 @app.route('/api/system/update', methods=['POST'])
 def api_system_update():
-    """Run apt-get update && apt-get upgrade -y in the background."""
-    try:
-        subprocess.Popen(
-            ['sudo', 'apt-get', 'update', '-qq'],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-        )
-        return jsonify({'ok': True, 'msg': 'Update started — check system logs for progress'})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
+    return _stream_apt(['sudo', 'apt-get', 'update'])
 
 @app.route('/api/system/upgrade', methods=['POST'])
 def api_system_upgrade():
-    """Run apt-get upgrade -y in the background."""
-    try:
-        subprocess.Popen(
-            ['sudo', 'apt-get', 'upgrade', '-y', '-qq'],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
-        )
-        return jsonify({'ok': True, 'msg': 'Upgrade started — this may take several minutes'})
-    except Exception as e:
-        return jsonify({'ok': False, 'error': str(e)}), 500
+    return _stream_apt(['sudo', 'apt-get', 'upgrade', '-y'])
 
 def _git(args, timeout=30):
     """Run a git command as the 'admin' user (repo owner with SSH keys)."""
