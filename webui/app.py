@@ -10,7 +10,7 @@ import json
 import time
 import glob as glob_mod
 import subprocess
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from flask import Flask, jsonify, request, send_from_directory
 import requests as req
 try:
@@ -89,7 +89,21 @@ def fetch_all():
         g = f.fetch_games()
         if g:
             all_games.extend(g)
-    cache['games'] = all_games
+    # Drop finished games whose start time is more than 6 hours ago — same
+    # rule as main.py so the dashboard matches what the board displays.
+    now_utc = datetime.now(timezone.utc)
+    def is_fresh(g):
+        if g.status != 'post':
+            return True
+        if not g.start_time_utc:
+            return True
+        try:
+            start = datetime.fromisoformat(g.start_time_utc.replace('Z', '+00:00'))
+            return (now_utc - start).total_seconds() < 6 * 3600
+        except Exception:
+            return True
+
+    cache['games'] = [g for g in all_games if is_fresh(g)]
     cache['last_fetch'] = time.time()
 
 def game_to_dict(g):

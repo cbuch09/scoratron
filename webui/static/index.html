@@ -164,6 +164,7 @@ nav {
 
 .page { display: none; padding: 28px 32px; max-width: 1400px; margin: 0 auto; }
 .page.active { display: block; }
+#page-dashboard.active { display: flex; flex-direction: column; align-items: center; }
 
 /* ── Matrix Preview ── */
 .preview-section {
@@ -173,6 +174,8 @@ nav {
   padding: 20px;
   margin-bottom: 20px;
   box-shadow: var(--shadow);
+  width: fit-content;
+  max-width: 100%;
 }
 
 .section-label {
@@ -213,9 +216,10 @@ nav {
 /* ── Games List ── */
 .games-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 320px));
   gap: 12px;
   margin-bottom: 24px;
+  justify-content: center;
 }
 
 .game-card {
@@ -1351,6 +1355,11 @@ let previewInterval = null;
 let scrollEnabled = true;
 let continuousScrollEnabled = false;
 
+// ── Preview animation state ──────────────────────────────────────────────────
+let previewGameId   = null;   // game_id currently shown
+let previewScores   = {};     // gameId → {away, home} for flash detection
+let previewScrolling = false; // true while scroll animation is running
+
 // ── Navigation ──────────────────────────────────────────────────────────────
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -1377,6 +1386,101 @@ function toast(msg, err=false) {
 // ── Matrix Preview ───────────────────────────────────────────────────────────
 function rgbToHex(r, g, b) {
   return '#' + [r,g,b].map(x => x.toString(16).padStart(2,'0')).join('');
+}
+
+// Render a game to an offscreen canvas, returns a Promise<canvas>
+function drawMatrixOffscreen(game) {
+  return new Promise(resolve => {
+    const oc = document.createElement('canvas');
+    oc.width  = W * PIXEL_SCALE;
+    oc.height = H * PIXEL_SCALE;
+    if (!game) {
+      const ctx = oc.getContext('2d');
+      ctx.fillStyle = '#000';
+      ctx.fillRect(0, 0, oc.width, oc.height);
+      resolve(oc);
+      return;
+    }
+    if (game.mode === 'weather') {
+      drawWeatherMatrix(game, oc);
+      resolve(oc);
+      return;
+    }
+    const awayImg = new Image();
+    const homeImg = new Image();
+    let n = 0;
+    const done = () => { if (++n === 2) { renderMatrix(game, awayImg, homeImg, oc); resolve(oc); } };
+    awayImg.onload = awayImg.onerror = done;
+    homeImg.onload = homeImg.onerror = done;
+    awayImg.src = `/logos/${game.sport}/${game.away.abbreviation}.png`;
+    homeImg.src = `/logos/${game.sport}/${game.home.abbreviation}.png`;
+  });
+}
+
+// Scroll the preview from one canvas to another (left-to-right slide)
+function animatePreviewScroll(fromCanvas, toCanvas) {
+  previewScrolling = true;
+  const main    = document.getElementById('matrix-preview');
+  const ctx     = main.getContext('2d');
+  const W_PX    = W * PIXEL_SCALE;
+  const H_PX    = H * PIXEL_SCALE;
+  const duration = 450;
+  const t0 = performance.now();
+
+  function frame(now) {
+    const t    = Math.min((now - t0) / duration, 1);
+    const ease = 1 - Math.pow(1 - t, 3);        // ease-out cubic
+    const off  = Math.round(ease * W_PX);
+    ctx.fillStyle = '#000';
+    ctx.fillRect(0, 0, W_PX, H_PX);
+    ctx.drawImage(fromCanvas, -off, 0);
+    ctx.drawImage(toCanvas,  W_PX - off, 0);
+    if (t < 1) {
+      requestAnimationFrame(frame);
+    } else {
+      ctx.drawImage(toCanvas, 0, 0);
+      previewScrolling = false;
+    }
+  }
+  requestAnimationFrame(frame);
+}
+
+// Flash just the score digits 3 times, matching renderer.py flash_score()
+function animatePreviewFlash(side, game) {
+  const main  = document.getElementById('matrix-preview');
+  const ctx   = main.getContext('2d');
+  const S     = PIXEL_SCALE;
+  const BAR_W = 20;
+  const AWAY_CX = BAR_W + 22;
+  const HOME_CX = W - BAR_W - 22;
+
+  const cx    = side === 'away' ? AWAY_CX : HOME_CX;
+  const score = side === 'away' ? game.away.score : game.home.score;
+  const n     = String(score).length;
+  const scoreW = n * 8 - 2;
+  // Match renderer blank region: [cx - scoreW//2 - 1, 6, cx + scoreW - scoreW//2, 15]
+  const bx = (cx - Math.floor(scoreW / 2) - 1) * S;
+  const by = 6 * S;
+  const bw = (scoreW + 2) * S;
+  const bh = 10 * S;
+
+  // Save the fully-rendered frame so we can restore it between blinks
+  const saved = ctx.getImageData(0, 0, main.width, main.height);
+
+  let tick = 0;
+  const interval = setInterval(() => {
+    if (tick % 2 === 0) {
+      // Blank phase — black out just the score region
+      ctx.putImageData(saved, 0, 0);
+      ctx.fillStyle = '#000';
+      ctx.fillRect(bx, by, bw, bh);
+    } else {
+      // Restore phase
+      ctx.putImageData(saved, 0, 0);
+    }
+    tick++;
+    if (tick >= 6) clearInterval(interval); // 3 blinks (3 blank + 3 restore)
+  }, 150);
 }
 
 function drawMatrix(game) {
@@ -1413,8 +1517,8 @@ function drawMatrix(game) {
   homeImg.src = `/logos/${game.sport}/${game.home.abbreviation}.png`;
 }
 
-function drawWeatherMatrix(w) {
-  const canvas = document.getElementById('matrix-preview');
+function drawWeatherMatrix(w, targetCanvas) {
+  const canvas = targetCanvas || document.getElementById('matrix-preview');
   const ctx = canvas.getContext('2d');
   const S = PIXEL_SCALE;
   canvas.width = W * S;
@@ -1453,8 +1557,9 @@ function drawWeatherMatrix(w) {
   pxTextCentered(w.time || '', 22, '#ffffff', 5);
 }
 
-function renderMatrix(game, awayImg, homeImg) {
-  const canvas = document.getElementById('matrix-preview');
+// Render a game frame to any canvas (defaults to #matrix-preview)
+function renderMatrix(game, awayImg, homeImg, targetCanvas) {
+  const canvas = targetCanvas || document.getElementById('matrix-preview');
   const ctx = canvas.getContext('2d');
   const S = PIXEL_SCALE;
 
@@ -1743,18 +1848,6 @@ async function loadGames() {
     const r = await fetch('/api/games');
     games = await r.json();
     renderGamesGrid();
-    if (games.length > 0) {
-      const idx = settings.pinned_game
-        ? games.findIndex(g => g.game_id === settings.pinned_game)
-        : 0;
-      drawMatrix(games[Math.max(0, idx)]);
-      const g = games[Math.max(0, idx)];
-      const label = `${g.away.abbreviation} ${g.away.score} — ${g.home.abbreviation} ${g.home.score} · ${g.status_detail}`;
-      document.getElementById('preview-label').textContent = label;
-    } else {
-      drawMatrix(null);
-      document.getElementById('preview-label').textContent = 'No games available';
-    }
   } catch(e) {
     console.error(e);
   }
@@ -2340,31 +2433,54 @@ async function forgetWifi() {
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
+async function pollCurrentGame() {
+  try {
+    const r    = await fetch('/api/current');
+    const game = await r.json();
+    if (!game) return;
+
+    // Update label
+    const label = game.mode === 'weather'
+      ? `${game.zip_code} · ${game.condition} · ${game.temp_f}°F · ${game.time}`
+      : `${game.away.abbreviation} ${game.away.score} — ${game.home.abbreviation} ${game.home.score} · ${game.status_detail}`;
+    document.getElementById('preview-label').textContent = label;
+
+    const gid = game.game_id || game.mode || 'weather';
+
+    if (gid !== previewGameId && previewGameId !== null && !previewScrolling) {
+      // Game changed — capture current frame, render new game offscreen, scroll
+      const main = document.getElementById('matrix-preview');
+      const fromCanvas = document.createElement('canvas');
+      fromCanvas.width  = main.width;
+      fromCanvas.height = main.height;
+      fromCanvas.getContext('2d').drawImage(main, 0, 0);
+
+      const toCanvas = await drawMatrixOffscreen(game);
+      animatePreviewScroll(fromCanvas, toCanvas);
+    } else if (!previewScrolling) {
+      // Same game — check for score change and flash
+      if (game.mode !== 'weather' && game.is_live) {
+        const prev = previewScores[gid];
+        if (prev) {
+          if (game.away.score > prev.away)       animatePreviewFlash('away', game);
+          else if (game.home.score > prev.home)  animatePreviewFlash('home', game);
+        }
+        previewScores[gid] = { away: game.away.score, home: game.home.score };
+      }
+      drawMatrix(game);
+    }
+
+    previewGameId = gid;
+  } catch(e) {}
+}
+
 async function init() {
   updateSimTeams('BOS', 'MIA');  // populate simulator dropdowns with NBA defaults
   await loadSettings();
   await loadGames();
   await loadSysInfo();
-  // Auto-refresh every 15s
-  // Poll current game for live preview every 1 second
-  setInterval(async () => {
-      try {
-          const r = await fetch('/api/current');
-          const game = await r.json();
-          if (game) {
-              drawMatrix(game);
-              let label;
-              if (game.mode === 'weather') {
-                  label = `${game.zip_code} · ${game.condition} · ${game.temp_f}°F · ${game.time}`;
-              } else {
-                  label = `${game.away.abbreviation} ${game.away.score} — ${game.home.abbreviation} ${game.home.score} · ${game.status_detail}`;
-              }
-              document.getElementById('preview-label').textContent = label;
-          }
-      } catch(e) {}
-  }, 1000);
-
-  // Refresh games list every 15s
+  await pollCurrentGame();       // seed preview immediately, no blank gap on load
+  setInterval(pollCurrentGame, 1000);
   setInterval(loadGames, 15000);
   setInterval(loadSysInfo, 30000);
 }
