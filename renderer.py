@@ -616,7 +616,9 @@ class ScoreBugRenderer:
         def _label_w(team):
             if game.is_playoff and team.seed:
                 return _seed_label_w(team.seed)
-            return (len(team.record) - 1) * 4 + 3 if team.record else 0
+            if not game.is_playoff and team.record:
+                return (len(team.record) - 1) * 4 + 3
+            return 0
 
         away_lw = _label_w(game.away)
         home_lw = _label_w(game.home)
