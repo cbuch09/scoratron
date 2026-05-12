@@ -96,7 +96,7 @@ def has_network():
         return False
 
 def load_webui_settings():
-    path = '/home/admin/scoratron/settings.json'
+    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'settings.json')
     try:
         if os.path.exists(path):
             with open(path) as f:

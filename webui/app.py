@@ -18,8 +18,9 @@ try:
 except ImportError:
     Image = None
 
-sys.path.insert(0, '/home/admin/scoratron')
-os.chdir('/home/admin/scoratron')
+SCORATRON_DIR = os.path.realpath(os.path.join(os.path.dirname(__file__), '..'))
+sys.path.insert(0, SCORATRON_DIR)
+os.chdir(SCORATRON_DIR)
 
 from config import Config, ESPN_ENDPOINTS, TEAM_COLORS
 from score_fetcher import ScoreFetcher
@@ -28,7 +29,7 @@ from models import GameState, TeamInfo
 app = Flask(__name__, static_folder='static')
 
 CERT = '/etc/ssl/certs/ca-certificates.crt'
-SETTINGS_FILE = '/home/admin/scoratron/settings.json'
+SETTINGS_FILE = os.path.join(SCORATRON_DIR, 'settings.json')
 SIM_FILE = '/tmp/scoratron_sim.json'
 PARADE_FILE = '/tmp/scoratron_parade.json'
 
@@ -281,7 +282,7 @@ def api_system_upgrade():
 def _git(args, timeout=30):
     """Run a git command as the 'admin' user (repo owner with SSH keys)."""
     return subprocess.run(
-        ['sudo', '-u', 'admin', 'git', '-C', '/home/admin/scoratron'] + args,
+        ['sudo', '-u', os.environ.get('SUDO_USER', 'admin'), 'git', '-C', SCORATRON_DIR] + args,
         capture_output=True, text=True, timeout=timeout
     )
 
@@ -579,7 +580,6 @@ def api_parade_status():
 
 # ── Code Editor ──────────────────────────────────────────────────────────────
 
-SCORATRON_DIR = os.path.realpath('/home/admin/scoratron')
 EDITABLE_EXT  = {'.py', '.html', '.css', '.js', '.json', '.sh', '.conf',
                  '.md', '.txt', '.service', '.bdf', '.pil'}
 SKIP_DIRS     = {'__pycache__', '.git', 'logos', 'logos_web', 'venv', '.venv', 'env'}
@@ -645,15 +645,15 @@ def api_code_write():
 @app.route('/logos/<sport>/<filename>')
 def serve_logo(sport, filename):
     # Try web resolution first (64x64), fall back to matrix size (20x20)
-    web_path = f'/home/admin/scoratron/logos/{sport}_web'
-    matrix_path = f'/home/admin/scoratron/logos/{sport}'
+    web_path = os.path.join(SCORATRON_DIR, 'logos', f'{sport}_web')
+    matrix_path = os.path.join(SCORATRON_DIR, 'logos', sport)
     if os.path.exists(os.path.join(web_path, filename)):
         return send_from_directory(web_path, filename)
     return send_from_directory(matrix_path, filename)
 
 # ── Logo Editor ───────────────────────────────────────────────────────────────
 
-LOGO_BASE = '/home/admin/scoratron/logos'
+LOGO_BASE = os.path.join(SCORATRON_DIR, 'logos')
 
 def _logo_path(sport, abbr):
     return os.path.join(LOGO_BASE, sport, f'{abbr}.png')
