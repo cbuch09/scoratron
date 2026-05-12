@@ -5,7 +5,8 @@ set -e
 
 INSTALL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VENV_DIR="$INSTALL_DIR/venv"
-RGB_SRC="/tmp/rpi-rgb-led-matrix"
+RGB_SRC="/home/${SUDO_USER:-admin}/rpi-rgb-led-matrix"
+RGB_COMMIT="d259502"   # known-good commit — supports runtime brightness changes
 SERVICE_USER="${SUDO_USER:-admin}"
 
 echo "==> Scoratron installer"
@@ -31,12 +32,15 @@ python3 -m venv "$VENV_DIR"
 echo "    Python deps installed."
 
 # ── 3. rpi-rgb-led-matrix C library + Python bindings ────────────────────────
-echo "==> Building rpi-rgb-led-matrix..."
-if [ -d "$RGB_SRC" ]; then
-    echo "    Source already present, skipping clone."
+echo "==> Building rpi-rgb-led-matrix (commit $RGB_COMMIT)..."
+if [ -d "$RGB_SRC/.git" ]; then
+    echo "    Source already present at $RGB_SRC."
+    git -C "$RGB_SRC" fetch -q origin
+    git -C "$RGB_SRC" checkout -q "$RGB_COMMIT"
 else
     echo "    Cloning rpi-rgb-led-matrix..."
-    git clone --depth=1 https://github.com/hzeller/rpi-rgb-led-matrix.git "$RGB_SRC"
+    git clone https://github.com/hzeller/rpi-rgb-led-matrix.git "$RGB_SRC"
+    git -C "$RGB_SRC" checkout -q "$RGB_COMMIT"
     echo "    Clone done."
 fi
 
