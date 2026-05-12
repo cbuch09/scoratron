@@ -63,7 +63,7 @@ for entry in entries:
 fi
 
 echo "    Compiling rgbmatrix C extensions (may take several minutes on a Pi)..."
-CMAKE_BUILD_PARALLEL_LEVEL=$(nproc) "$VENV_DIR/bin/pip" install -e "$RGB_SRC"
+CMAKE_BUILD_PARALLEL_LEVEL=1 "$VENV_DIR/bin/pip" install -e "$RGB_SRC"
 echo "    rgbmatrix built and installed."
 
 # ── 4. Font files ─────────────────────────────────────────────────────────────
