@@ -204,6 +204,13 @@ class ScoreBugRenderer:
                 self._draw_down_distance(draw, game)
         return img
 
+    def draw_no_network(self):
+        img  = self._new_image()
+        draw = ImageDraw.Draw(img)
+        draw.text((CX - text_width("No Network", FONT) // 2, 9),  "No Network",  font=FONT, fill=(220, 60, 60))
+        draw.text((CX - text_width("Connected", FONT) // 2,  17), "Connected",   font=FONT, fill=(180, 40, 40))
+        self._push(img)
+
     def draw_no_games(self, sport: str):
         img  = self._new_image()
         draw = ImageDraw.Draw(img)

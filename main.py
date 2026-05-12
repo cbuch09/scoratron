@@ -5,6 +5,7 @@ import sys
 import signal
 import os
 import json
+import socket
 import requests
 from datetime import datetime, timezone
 from renderer import ScoreBugRenderer
@@ -84,6 +85,15 @@ def game_started_within(game, seconds):
         return age < seconds
     except Exception:
         return True
+
+def has_network():
+    """Return True if we can reach the internet (quick TCP probe to 8.8.8.8:53)."""
+    try:
+        socket.setdefaulttimeout(2)
+        socket.create_connection(("8.8.8.8", 53)).close()
+        return True
+    except OSError:
+        return False
 
 def load_webui_settings():
     path = '/home/admin/scoratron/settings.json'
@@ -296,6 +306,8 @@ def main():
     scroll_offset = 0
     scroll_strip  = None
     LINGER_SECONDS = 30 * 60
+    last_network_check = 0
+    network_ok = True
 
 
     applied_brightness = args.brightness
@@ -340,6 +352,15 @@ def main():
                 # Preview mode — just wait
                 while load_parade_active():
                     time.sleep(0.5)
+            continue
+
+        # Network connectivity check — every 10s
+        if now - last_network_check >= 10:
+            network_ok = has_network()
+            last_network_check = now
+        if not network_ok:
+            renderer.draw_no_network()
+            time.sleep(1)
             continue
 
         # Refresh scores from API — 5s when live, configured rate otherwise, 5 min when no games
