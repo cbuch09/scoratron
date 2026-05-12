@@ -33,13 +33,37 @@ echo "    Python deps installed."
 # ── 3. rpi-rgb-led-matrix C library + Python bindings ────────────────────────
 echo "==> Building rpi-rgb-led-matrix..."
 if [ -d "$RGB_SRC" ]; then
-    git -C "$RGB_SRC" pull -q
+    echo "    Source already present, skipping clone."
 else
-    git clone --depth=1 https://github.com/hzeller/rpi-rgb-led-matrix.git "$RGB_SRC" -q
+    echo "    Cloning rpi-rgb-led-matrix..."
+    git clone --depth=1 https://github.com/hzeller/rpi-rgb-led-matrix.git "$RGB_SRC"
+    echo "    Clone done."
 fi
-cd "$RGB_SRC/bindings/python"
-"$VENV_DIR/bin/pip" install -e . -q
-cd "$INSTALL_DIR"
+
+# Imaging.h ships only in Pillow's source tree, not in binary wheels.
+# Fetch just that one file from GitHub rather than downloading the full sdist.
+if true; then
+    PILLOW_VER="$("$VENV_DIR/bin/pip" show Pillow | awk '/^Version:/{print $2}')"
+    echo "    Fetching Pillow $PILLOW_VER libImaging headers..."
+    "$VENV_DIR/bin/python3" -c "
+import urllib.request, json, os
+
+ver = '$PILLOW_VER'
+dest_dir = '$RGB_SRC/bindings/python/rgbmatrix/shims/'
+api = 'https://api.github.com/repos/python-pillow/Pillow/contents/src/libImaging?ref=' + ver
+
+with urllib.request.urlopen(api) as r:
+    entries = json.load(r)
+
+for entry in entries:
+    if entry['name'].endswith('.h'):
+        urllib.request.urlretrieve(entry['download_url'], os.path.join(dest_dir, entry['name']))
+        print('    Fetched', entry['name'])
+"
+fi
+
+echo "    Compiling rgbmatrix C extensions (may take several minutes on a Pi)..."
+CMAKE_BUILD_PARALLEL_LEVEL=$(nproc) "$VENV_DIR/bin/pip" install -e "$RGB_SRC"
 echo "    rgbmatrix built and installed."
 
 # ── 4. Font files ─────────────────────────────────────────────────────────────
