@@ -66,9 +66,14 @@ for entry in entries:
 "
 fi
 
-echo "    Compiling rgbmatrix C extensions (may take several minutes on a Pi)..."
-CMAKE_BUILD_PARALLEL_LEVEL=1 "$VENV_DIR/bin/pip" install -e "$RGB_SRC"
-echo "    rgbmatrix built and installed."
+CURRENT_COMMIT="$(git -C "$RGB_SRC" rev-parse HEAD 2>/dev/null | cut -c1-7 || true)"
+if [ "$CURRENT_COMMIT" = "$RGB_COMMIT" ] && "$VENV_DIR/bin/python3" -c "import rgbmatrix" 2>/dev/null; then
+    echo "    rgbmatrix already built at $RGB_COMMIT — skipping compile."
+else
+    echo "    Compiling rgbmatrix C extensions (may take several minutes on a Pi)..."
+    CMAKE_BUILD_PARALLEL_LEVEL=1 "$VENV_DIR/bin/pip" install -e "$RGB_SRC"
+    echo "    rgbmatrix built and installed."
+fi
 
 # ── 4. Font files ─────────────────────────────────────────────────────────────
 echo "==> Installing fonts..."
