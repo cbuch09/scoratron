@@ -105,7 +105,50 @@ fi
 # Ensure settings.json is always readable/writable by the services (run as root)
 chmod 666 "$INSTALL_DIR/settings.json"
 
-# ── 6. Logo directories ───────────────────────────────────────────────────────
+# ── 6. Pi hardware tuning for LED matrix (anti-flicker) ──────────────────────
+echo "==> Configuring Pi for LED matrix..."
+
+# Locate config.txt — path differs between Bookworm and Trixie/older
+CONFIG_TXT=""
+for p in /boot/firmware/config.txt /boot/config.txt; do
+    [ -f "$p" ] && CONFIG_TXT="$p" && break
+done
+
+if [ -n "$CONFIG_TXT" ]; then
+    # Disable audio — frees DMA channels used by the matrix PWM driver
+    if grep -q "^dtparam=audio=" "$CONFIG_TXT"; then
+        sed -i 's/^dtparam=audio=.*/dtparam=audio=off/' "$CONFIG_TXT"
+    elif grep -q "^#dtparam=audio=" "$CONFIG_TXT"; then
+        sed -i 's/^#dtparam=audio=.*/dtparam=audio=off/' "$CONFIG_TXT"
+    else
+        echo "dtparam=audio=off" >> "$CONFIG_TXT"
+    fi
+    echo "    Audio disabled in $CONFIG_TXT"
+else
+    echo "    WARNING: config.txt not found — disable audio manually"
+fi
+
+# Locate cmdline.txt
+CMDLINE_TXT=""
+for p in /boot/firmware/cmdline.txt /boot/cmdline.txt; do
+    [ -f "$p" ] && CMDLINE_TXT="$p" && break
+done
+
+if [ -n "$CMDLINE_TXT" ]; then
+    # isolcpus=3 reserves core 3 for the matrix driver — eliminates most flickering
+    if ! grep -q "isolcpus=3" "$CMDLINE_TXT"; then
+        sed -i 's/$/ isolcpus=3/' "$CMDLINE_TXT"
+        echo "    isolcpus=3 added to $CMDLINE_TXT"
+    else
+        echo "    isolcpus=3 already present in $CMDLINE_TXT"
+    fi
+else
+    echo "    WARNING: cmdline.txt not found — add isolcpus=3 manually"
+fi
+
+echo "    NOTE: reboot required for hardware tuning to take effect"
+
+# ── 7. Logo directories ───────────────────────────────────────────────────────
 echo "==> Creating logo directories..."
 mkdir -p "$INSTALL_DIR/logos/nba_web"
 mkdir -p "$INSTALL_DIR/logos/nfl_web"
