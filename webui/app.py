@@ -823,6 +823,11 @@ def logo_editor_delete(sport, abbr):
         os.remove(f)
     return jsonify({'ok': True})
 
+@app.after_request
+def log_request(response):
+    print(f'[api] {request.method} {request.path} → {response.status_code}')
+    return response
+
 if __name__ == '__main__':
     init_settings()
     _ensure_all_originals()
