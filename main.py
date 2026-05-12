@@ -95,7 +95,8 @@ def has_network():
     except OSError:
         return False
 
-SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'settings.json')
+_SETTINGS_SEED = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'settings.json')
+SETTINGS_FILE  = '/tmp/scoratron_settings.json'
 
 DEFAULT_SETTINGS = {
     'sport': 'auto',
@@ -112,13 +113,21 @@ DEFAULT_SETTINGS = {
 
 def load_webui_settings():
     if not os.path.exists(SETTINGS_FILE):
+        # Seed from repo settings.json if available, else use defaults
+        seed = DEFAULT_SETTINGS.copy()
+        if os.path.exists(_SETTINGS_SEED):
+            try:
+                with open(_SETTINGS_SEED) as f:
+                    seed.update(json.load(f))
+            except Exception:
+                pass
         try:
             with open(SETTINGS_FILE, 'w') as f:
-                json.dump(DEFAULT_SETTINGS, f, indent=2)
-            print(f'[settings] created default settings at {SETTINGS_FILE}')
+                json.dump(seed, f, indent=2)
+            print(f'[settings] seeded {SETTINGS_FILE} from repo defaults')
         except Exception as e:
-            print(f'[settings] could not create default settings: {e}')
-        return DEFAULT_SETTINGS.copy()
+            print(f'[settings] could not seed settings: {e}')
+        return seed
     try:
         with open(SETTINGS_FILE) as f:
             return json.load(f)

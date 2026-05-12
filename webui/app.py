@@ -29,7 +29,8 @@ from models import GameState, TeamInfo
 app = Flask(__name__, static_folder='static')
 
 CERT = '/etc/ssl/certs/ca-certificates.crt'
-SETTINGS_FILE = os.path.join(SCORATRON_DIR, 'settings.json')
+SETTINGS_FILE = '/tmp/scoratron_settings.json'
+_SETTINGS_SEED = os.path.join(SCORATRON_DIR, 'settings.json')
 SIM_FILE = '/tmp/scoratron_sim.json'
 PARADE_FILE = '/tmp/scoratron_parade.json'
 
@@ -63,7 +64,14 @@ def save_settings(s):
 def init_settings():
     """Write default settings on first run so the file always exists."""
     if not os.path.exists(SETTINGS_FILE):
-        save_settings(DEFAULT_SETTINGS.copy())
+        seed = DEFAULT_SETTINGS.copy()
+        if os.path.exists(_SETTINGS_SEED):
+            try:
+                with open(_SETTINGS_SEED) as f:
+                    seed.update(json.load(f))
+            except Exception:
+                pass
+        save_settings(seed)
 
 # ── Cache ──────────────────────────────────────────────────────────────────
 cache = {
