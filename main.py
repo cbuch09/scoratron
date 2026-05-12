@@ -344,7 +344,8 @@ def main():
 
         # Refresh scores from API — 5s when live, configured rate otherwise, 5 min when no games
         has_live = any(g.is_live for g in games)
-        effective_interval = 5 if has_live else (config.refresh_interval if games else 300)
+        live_interval = int(webui.get('live_refresh_rate', 5)) if webui else 5
+        effective_interval = live_interval if has_live else (config.refresh_interval if games else 300)
         if now - last_fetch >= effective_interval:
             new_games = []
             for sport, fetcher in fetchers.items():
@@ -401,8 +402,11 @@ def main():
                         return _dt.fromisoformat(g.start_time_utc.replace("Z", "+00:00"))
                     except Exception:
                         return _now
-                if min(_start(g) for g in upcoming) <= _cutoff:
-                    games = upcoming
+                earliest_start = min(_start(g) for g in upcoming)
+                if earliest_start <= _cutoff:
+                    # Show all games on the same local calendar day as the first game
+                    first_day = earliest_start.astimezone().date()
+                    games = [g for g in upcoming if _start(g).astimezone().date() == first_day]
                 else:
                     games = []
             else:

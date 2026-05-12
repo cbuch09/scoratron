@@ -872,9 +872,9 @@ pre {
     </div>
 
     <div class="control-card">
-      <div class="control-label">Refresh Rate</div>
-      <div class="control-value"><span id="refresh-val">15</span>s</div>
-      <input type="range" id="ctrl-refresh" min="10" max="60" step="5" value="15"
+      <div class="control-label">API Refresh Rate</div>
+      <div class="control-value"><span id="refresh-val">5</span>s</div>
+      <input type="range" id="ctrl-refresh" min="5" max="30" step="5" value="5"
              oninput="document.getElementById('refresh-val').textContent=this.value" onchange="settingChanged()">
     </div>
 
@@ -1642,7 +1642,7 @@ function renderMatrix(game, awayImg, homeImg, targetCanvas) {
       const lw = seedLabelW(team.seed);
       const lx = barX + Math.floor((BAR_W - lw) / 2) + nudge;
       drawSeedLabel(team.seed, lx, 27, col);
-    } else if (team.record) {
+    } else if (!game.is_playoff && team.record) {
       const lw = microWidth(team.record);
       const lx = barX + Math.floor((BAR_W - lw) / 2) + nudge;
       drawMicroText(team.record, lx, 27, col);
@@ -1659,20 +1659,37 @@ function renderMatrix(game, awayImg, homeImg, targetCanvas) {
     header = labels[game.period] || `P${game.period}`;
   }
   else if (game.status === 'post') header = 'FINAL';
-  else header = 'PRE';
+  else { header = game.sport.toUpperCase(); headerColor = '#a0a0a0'; }
+
+  // Playoff game_label overrides header for non-live games (Super Bowl, Game 7, East 1st, etc.)
+  const gameLabelActive = game.is_playoff && game.game_label && !game.is_live;
+  if (gameLabelActive) { header = game.game_label.substring(0, 8); headerColor = '#b400ff'; }
 
   ctx.fillStyle = headerColor;
   ctx.font = `bold ${6 * S}px 'Share Tech Mono', monospace`;
   ctx.textAlign = 'center';
-  ctx.fillText(header, CX * S, 1 * S);
+  const headerY = gameLabelActive ? 0 : 1;
+  ctx.fillText(header, CX * S, headerY * S);
 
-  // Big scores
-  drawBigScore(ctx, String(game.away.score), AWAY_CX, 6, '#ffffff', S);
-  drawBigDash(ctx, CX - 3, 6, '#404060', S);
-  drawBigScore(ctx, String(game.home.score), HOME_CX, 6, '#ffffff', S);
+  // Big scores — pre-game shows VS instead of 0-0
+  if (game.status === 'pre') {
+    ctx.fillStyle = '#505050';
+    ctx.font = `bold ${5 * S}px 'Share Tech Mono', monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText('VS', CX * S, 10 * S);
+  } else {
+    drawBigScore(ctx, String(game.away.score), AWAY_CX, 6, '#ffffff', S);
+    drawBigDash(ctx, CX - 3, 6, '#404060', S);
+    drawBigScore(ctx, String(game.home.score), HOME_CX, 6, '#ffffff', S);
+  }
 
-  // Clock
-  if (game.is_live && !game.is_halftime) {
+  // Clock / start time
+  if (game.status === 'pre') {
+    ctx.fillStyle = '#ffc832';
+    ctx.font = `${5 * S}px 'Share Tech Mono', monospace`;
+    ctx.textAlign = 'center';
+    ctx.fillText((game.status_detail || 'UPCOMING').substring(0, 12), CX * S, 17 * S);
+  } else if (game.is_live && !game.is_halftime) {
     ctx.fillStyle = '#ffc832';
     ctx.font = `${5 * S}px 'Share Tech Mono', monospace`;
     ctx.textAlign = 'center';
@@ -1914,10 +1931,10 @@ async function loadSettings() {
     settings = await r.json();
     document.getElementById('ctrl-sport').value = settings.sport || 'auto';
     document.getElementById('ctrl-dwell').value = settings.scroll_dwell || 10;
-    document.getElementById('ctrl-refresh').value = settings.refresh_rate || 15;
+    document.getElementById('ctrl-refresh').value = settings.live_refresh_rate || 5;
     document.getElementById('ctrl-brightness').value = settings.brightness || 60;
     document.getElementById('dwell-val').textContent = settings.scroll_dwell || 10;
-    document.getElementById('refresh-val').textContent = settings.refresh_rate || 15;
+    document.getElementById('refresh-val').textContent = settings.live_refresh_rate || 5;
     document.getElementById('brightness-val').textContent = settings.brightness || 60;
     scrollEnabled = settings.scroll !== false;
     updateScrollToggle();
@@ -1959,7 +1976,7 @@ async function applySettings() {
     sport: document.getElementById('ctrl-sport').value,
     scroll: scrollEnabled,
     scroll_dwell: parseInt(document.getElementById('ctrl-dwell').value),
-    refresh_rate: parseInt(document.getElementById('ctrl-refresh').value),
+    live_refresh_rate: parseInt(document.getElementById('ctrl-refresh').value),
     brightness: parseInt(document.getElementById('ctrl-brightness').value),
     pinned_game: settings.pinned_game || null,
     continuous_scroll: continuousScrollEnabled,

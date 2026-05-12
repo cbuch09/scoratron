@@ -308,29 +308,32 @@ class ScoreBugRenderer:
         code      = int(weather.get('weather_code', 0))
         is_day    = int(weather.get('is_day', 1))
 
-        # Three rows centred in the 32px display:
-        #   row 1 (FONT_ABBR, 7px): y=5, icon_cy=8
-        #   row 2 (FONT,      5px): y=14
-        #   row 3 (FONT,      5px): y=21
-        # Total block = 7+2+5+2+5 = 21px → (32-21)//2 = 5
-
-        # Temperature — FONT_ABBR, yellow
-        temp_str = f"{temp_f}F"
-        tw = text_width(temp_str, FONT_ABBR)
-        draw.text((34, 7), temp_str, font=FONT_ABBR, fill=(255, 220, 80))
-
-        # Icon — placed after temp with a small gap
+        # Row 1: [TEMP] [ICON] [CONDITION] — all centred as a group
+        # Row 2: wind/humidity/UV — centred, y=17
+        # Row 3: time — centred, y=24
         ICON_R  = 8          # bounding radius (rays / cloud extent)
-        icon_cx = 34 + tw + 3 + ICON_R
+        GAP     = 3          # pixels between elements
+
+        temp_str = f"{temp_f}F"
+        tw       = text_width(temp_str, FONT_ABBR)
+        cond_w   = text_width(condition, FONT_ABBR)
+        row1_w   = tw + GAP + 2 * ICON_R + GAP + cond_w
+        row1_x   = CX - row1_w // 2
+
+        # Temperature
+        draw.text((row1_x, 7), temp_str, font=FONT_ABBR, fill=(255, 220, 80))
+
+        # Icon
+        icon_cx = row1_x + tw + GAP + ICON_R
         icon_cy = 8
         self._wx_icon(draw, code, is_day, icon_cx, icon_cy)
 
-        # Condition — FONT_ABBR, vertically centred with icon
-        cond_x = icon_cx + ICON_R + 3
-        cond_y = icon_cy - 1   # FONT_ABBR is ~7px tall, dropped 2px from icon centre
+        # Condition
+        cond_x = icon_cx + ICON_R + GAP
+        cond_y = icon_cy - 1
         draw.text((cond_x, cond_y), condition, font=FONT_ABBR, fill=COLOR_WHITE)
 
-        # Wind + humidity + UV — centred across full width
+        # Wind + humidity + UV — centred, y=17
         wind_str = f"W:{wind_mph}"
         if wind_dir:
             wind_str += f" {wind_dir}"
@@ -338,12 +341,12 @@ class ScoreBugRenderer:
         if uv and uv != '0':
             info += f"  UV:{uv}"
         iw = text_width(info, FONT)
-        draw.text((CX - iw // 2, 15), info, font=FONT, fill=COLOR_CLOCK)
+        draw.text((CX - iw // 2, 17), info, font=FONT, fill=COLOR_CLOCK)
 
-        # Time with seconds — centred
+        # Time with seconds — centred, y=24
         time_str = datetime.datetime.now().strftime("%-I:%M:%S %p")
         tw2 = text_width(time_str, FONT)
-        draw.text((CX - tw2 // 2, 22), time_str, font=FONT, fill=COLOR_WHITE)
+        draw.text((CX - tw2 // 2, 24), time_str, font=FONT, fill=COLOR_WHITE)
 
         self._push(img)
 
