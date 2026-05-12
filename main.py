@@ -95,14 +95,33 @@ def has_network():
     except OSError:
         return False
 
+SETTINGS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'settings.json')
+
+DEFAULT_SETTINGS = {
+    'sport': 'auto',
+    'scroll': True,
+    'scroll_dwell': 10,
+    'refresh_rate': 15,
+    'live_refresh_rate': 5,
+    'brightness': 60,
+    'pinned_game': None,
+    'zip_code': '',
+    'force_weather': False,
+    'continuous_scroll': False,
+}
+
 def load_webui_settings():
-    path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'settings.json')
+    if not os.path.exists(SETTINGS_FILE):
+        try:
+            with open(SETTINGS_FILE, 'w') as f:
+                json.dump(DEFAULT_SETTINGS, f, indent=2)
+            print(f'[settings] created default settings at {SETTINGS_FILE}')
+        except Exception as e:
+            print(f'[settings] could not create default settings: {e}')
+        return DEFAULT_SETTINGS.copy()
     try:
-        if os.path.exists(path):
-            with open(path) as f:
-                return json.load(f)
-        else:
-            print(f'[settings] not found: {path}')
+        with open(SETTINGS_FILE) as f:
+            return json.load(f)
     except Exception as e:
         print(f'[settings] load error: {e}')
     return None
