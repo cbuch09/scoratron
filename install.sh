@@ -119,7 +119,7 @@ Wants=network-online.target
 Type=simple
 User=root
 WorkingDirectory=$INSTALL_DIR
-ExecStart=$VENV_DIR/bin/python3 $INSTALL_DIR/main.py --scroll
+ExecStart=$VENV_DIR/bin/python3 -u $INSTALL_DIR/main.py --scroll
 Environment=SSL_CERT_FILE=$VENV_DIR/lib/python$(python3 -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')/site-packages/certifi/cacert.pem
 Restart=always
 RestartSec=10

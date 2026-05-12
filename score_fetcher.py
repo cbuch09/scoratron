@@ -59,6 +59,7 @@ class ScoreFetcher:
         try:
             resp = self.session.get(url, timeout=REQUEST_TIMEOUT, verify='/etc/ssl/certs/ca-certificates.crt')
             resp.raise_for_status()
+            print(f'[espn] GET {url} → {resp.status_code} ({resp.elapsed.total_seconds():.2f}s)')
             data = resp.json()
         except requests.RequestException as e:
             print(f"[fetcher] Network error: {e}")
