@@ -1385,7 +1385,8 @@ function showPage(id) {
   document.getElementById('page-' + id).classList.add('active');
   event.target.classList.add('active');
   if (id === 'apidata') loadApiData();
-  if (id === 'system') loadSysInfo();
+  if (id === 'system') { loadSysInfo(); startLogStream(); }
+  else stopLogStream();
   if (id === 'parade') loadParadeStatus();
   if (id === 'weather') loadWeatherPage();
   if (id === 'wifi') loadWifiStatus();
@@ -2088,16 +2089,6 @@ function updateLogCheckbox(cb) {
   cb.style.background = cb.checked ? 'var(--accent)' : 'var(--surface)';
 }
 
-// Start/stop stream when navigating to/from system page
-document.addEventListener('DOMContentLoaded', () => {
-  document.querySelectorAll('.nav-item').forEach(item => {
-    item.addEventListener('click', () => {
-      const target = item.dataset.page;
-      if (target === 'system') startLogStream();
-      else stopLogStream();
-    });
-  });
-});
 
 async function streamAptCommand(url, label) {
   const term = document.getElementById('os-terminal');
