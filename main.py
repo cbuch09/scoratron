@@ -101,6 +101,8 @@ def load_webui_settings():
         if os.path.exists(path):
             with open(path) as f:
                 return json.load(f)
+        else:
+            print(f'[settings] not found: {path}')
     except Exception as e:
         print(f'[settings] load error: {e}')
     return None
