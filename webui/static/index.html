@@ -1130,6 +1130,23 @@ pre {
     <button class="btn btn-secondary" onclick="osUpgrade()">Upgrade OS</button>
   </div>
   <pre id="os-terminal" style="display:none;margin-top:14px;background:#0a0a0f;border:1px solid var(--border);border-radius:6px;padding:12px 14px;font-family:var(--mono);font-size:11px;color:#c0c0d0;max-height:220px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;line-height:1.5"></pre>
+
+  <div class="section-label" style="margin-top:28px">// live logs</div>
+  <div style="display:flex;align-items:center;gap:12px;margin:12px 0 8px">
+    <label style="display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;color:var(--muted);cursor:pointer">
+      <input type="checkbox" id="log-autoscroll" checked
+        style="appearance:none;-webkit-appearance:none;width:14px;height:14px;border:2px solid var(--border);border-radius:3px;background:var(--surface);cursor:pointer;position:relative;flex-shrink:0"
+        onchange="updateLogCheckbox(this)">
+      Auto-scroll
+    </label>
+    <button class="btn btn-secondary" onclick="clearLogTerminal()" style="padding:3px 10px;font-size:11px">Clear</button>
+    <label style="display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:12px;color:var(--muted)">
+      Filter:
+      <input type="text" id="log-filter" placeholder="e.g. espn, settings"
+        style="width:160px;background:var(--surface);border:1px solid var(--border);border-radius:5px;padding:3px 8px;color:var(--text);font-family:var(--mono);font-size:12px">
+    </label>
+  </div>
+  <pre id="log-terminal" style="background:#0a0a0f;border:1px solid var(--border);border-radius:6px;padding:12px 14px;font-family:var(--mono);font-size:11px;color:#c0c0d0;height:300px;overflow-y:auto;white-space:pre-wrap;word-break:break-all;line-height:1.5;margin:0"></pre>
 </div>
 
 <!-- ── WEATHER ── -->
@@ -2032,6 +2049,55 @@ async function loadSysInfo() {
     }
   } catch(e) { console.error(e); }
 }
+
+// ── Live log terminal ────────────────────────────────────────────────────────
+let _logEvtSource = null;
+const LOG_MAX_LINES = 500;
+
+function startLogStream() {
+  if (_logEvtSource) { _logEvtSource.close(); _logEvtSource = null; }
+  const term = document.getElementById('log-terminal');
+  if (!term) return;
+  _logEvtSource = new EventSource('/api/logs/stream');
+  _logEvtSource.onmessage = e => {
+    const filter = document.getElementById('log-filter').value.trim().toLowerCase();
+    const line = e.data;
+    if (filter && !line.toLowerCase().includes(filter)) return;
+    term.textContent += line + '\n';
+    // Trim to max lines
+    const lines = term.textContent.split('\n');
+    if (lines.length > LOG_MAX_LINES) term.textContent = lines.slice(-LOG_MAX_LINES).join('\n');
+    if (document.getElementById('log-autoscroll').checked) term.scrollTop = term.scrollHeight;
+  };
+  _logEvtSource.onerror = () => {
+    // SSE auto-reconnects; silence the error
+  };
+}
+
+function stopLogStream() {
+  if (_logEvtSource) { _logEvtSource.close(); _logEvtSource = null; }
+}
+
+function clearLogTerminal() {
+  const term = document.getElementById('log-terminal');
+  if (term) term.textContent = '';
+}
+
+function updateLogCheckbox(cb) {
+  // style the checkbox fill
+  cb.style.background = cb.checked ? 'var(--accent)' : 'var(--surface)';
+}
+
+// Start/stop stream when navigating to/from system page
+document.addEventListener('DOMContentLoaded', () => {
+  document.querySelectorAll('.nav-item').forEach(item => {
+    item.addEventListener('click', () => {
+      const target = item.dataset.page;
+      if (target === 'system') startLogStream();
+      else stopLogStream();
+    });
+  });
+});
 
 async function streamAptCommand(url, label) {
   const term = document.getElementById('os-terminal');

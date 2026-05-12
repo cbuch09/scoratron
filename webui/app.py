@@ -282,6 +282,24 @@ def _stream_apt(cmd):
             yield f'[error: {e}]\n'
     return Response(stream_with_context(generate()), mimetype='text/plain')
 
+@app.route('/api/logs/stream')
+def api_logs_stream():
+    """Stream live journalctl output for both scoratron services as SSE."""
+    def generate():
+        try:
+            proc = subprocess.Popen(
+                ['journalctl', '-u', 'scoratron', '-u', 'scoratron-web',
+                 '-f', '-n', '50', '--no-pager', '--output=short'],
+                stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+                text=True, bufsize=1
+            )
+            for line in proc.stdout:
+                yield f'data: {line.rstrip()}\n\n'
+        except Exception as e:
+            yield f'data: [error: {e}]\n\n'
+    return Response(stream_with_context(generate()), mimetype='text/event-stream',
+                    headers={'Cache-Control': 'no-cache', 'X-Accel-Buffering': 'no'})
+
 @app.route('/api/system/update', methods=['POST'])
 def api_system_update():
     return _stream_apt(['sudo', 'apt-get', 'update'])
