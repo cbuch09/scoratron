@@ -79,7 +79,26 @@ if [ ! -f "$INSTALL_DIR/fonts/tom-thumb.pil" ]; then
     echo "    WARNING: fonts/tom-thumb.pil not found — copy font files manually."
 fi
 
-# ── 5. Logo directories ───────────────────────────────────────────────────────
+# ── 5. Default settings file ──────────────────────────────────────────────────
+if [ ! -f "$INSTALL_DIR/settings.json" ]; then
+    echo "==> Creating default settings.json..."
+    cat > "$INSTALL_DIR/settings.json" <<'SETTINGS'
+{
+  "sport": "auto",
+  "scroll": true,
+  "scroll_dwell": 10,
+  "refresh_rate": 15,
+  "live_refresh_rate": 5,
+  "brightness": 60,
+  "pinned_game": null,
+  "zip_code": "",
+  "force_weather": false,
+  "continuous_scroll": false
+}
+SETTINGS
+fi
+
+# ── 6. Logo directories ───────────────────────────────────────────────────────
 echo "==> Creating logo directories..."
 mkdir -p "$INSTALL_DIR/logos/nba_web"
 mkdir -p "$INSTALL_DIR/logos/nfl_web"
