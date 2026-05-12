@@ -54,8 +54,11 @@ def load_settings():
     return DEFAULT_SETTINGS.copy()
 
 def save_settings(s):
-    with open(SETTINGS_FILE, 'w') as f:
-        json.dump(s, f, indent=2)
+    try:
+        with open(SETTINGS_FILE, 'w') as f:
+            json.dump(s, f, indent=2)
+    except Exception as e:
+        print(f'[settings] save error: {e}')
 
 def init_settings():
     """Write default settings on first run so the file always exists."""

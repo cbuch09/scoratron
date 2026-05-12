@@ -97,6 +97,8 @@ if [ ! -f "$INSTALL_DIR/settings.json" ]; then
 }
 SETTINGS
 fi
+# Ensure settings.json is always readable/writable by the services (run as root)
+chmod 666 "$INSTALL_DIR/settings.json"
 
 # ── 6. Logo directories ───────────────────────────────────────────────────────
 echo "==> Creating logo directories..."
