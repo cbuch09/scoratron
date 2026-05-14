@@ -556,6 +556,9 @@ class ScoreBugRenderer:
             time_str = (game.status_detail or "UPCOMING")[:12]
             w = text_width(time_str, FONT)
             draw.text((CX - w // 2, 17), time_str, font=FONT, fill=COLOR_CLOCK)
+            if game.is_playoff and game.series_summary:
+                w = text_width(game.series_summary, FONT)
+                draw.text((CX - w // 2, 25), game.series_summary, font=FONT, fill=(180, 0, 255))
             return
         if game.is_halftime:
             if game.is_playoff and game.series_summary and game.sport == "nba":
@@ -573,8 +576,8 @@ class ScoreBugRenderer:
             w = text_width(clock_str, FONT)
             draw.text((CX - w//2, 16), clock_str, font=FONT, fill=COLOR_CLOCK)
 
-        # Show series record below clock during live NBA playoff games only
-        if game.is_playoff and game.series_summary and game.is_live and game.sport == "nba":
+        # Show series record below clock during live NBA playoff games, halftime, and post-game
+        if game.is_playoff and game.series_summary and (game.is_live or game.status == "post"):
             w = text_width(game.series_summary, FONT)
             draw.text((CX - w//2, 25), game.series_summary, font=FONT, fill=(180, 0, 255))
 

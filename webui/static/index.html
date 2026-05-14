@@ -1707,6 +1707,10 @@ function renderMatrix(game, awayImg, homeImg, targetCanvas) {
     ctx.font = `${5 * S}px 'Share Tech Mono', monospace`;
     ctx.textAlign = 'center';
     ctx.fillText((game.status_detail || 'UPCOMING').substring(0, 12), CX * S, 17 * S);
+    if (game.is_playoff && game.series_summary) {
+      ctx.fillStyle = '#b400ff';
+      ctx.fillText(game.series_summary, CX * S, 26 * S);
+    }
   } else if (game.is_live && !game.is_halftime) {
     ctx.fillStyle = '#ffc832';
     ctx.font = `${5 * S}px 'Share Tech Mono', monospace`;
@@ -1769,8 +1773,8 @@ function renderMatrix(game, awayImg, homeImg, targetCanvas) {
     }
   }
 
-  // Series record (playoff)
-  if (game.is_playoff && game.series_summary && game.is_live) {
+  // Series record (playoff) — live and post-game
+  if (game.is_playoff && game.series_summary && (game.is_live || game.status === 'post')) {
     ctx.fillStyle = '#b400ff';
     ctx.font = `${5 * S}px 'Share Tech Mono', monospace`;
     ctx.textAlign = 'center';
