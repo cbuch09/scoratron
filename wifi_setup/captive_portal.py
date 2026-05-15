@@ -25,46 +25,79 @@ HTML = """<!DOCTYPE html>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Scoratron WiFi Setup</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@400;600;700;900&display=swap" rel="stylesheet">
   <style>
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      background: #0d0d0d; color: #e8e8e8;
-      min-height: 100vh; display: flex; align-items: center; justify-content: center;
-      padding: 20px;
+      background: #111113; color: #f0f0f5;
+      font-family: 'Barlow Condensed', sans-serif; font-weight: 400;
+      min-height: 100vh; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; padding: 20px;
     }
+    .header {
+      width: 100%; max-width: 440px;
+      display: flex; align-items: center; gap: 10px;
+      margin-bottom: 24px;
+    }
+    .logo-icon { color: #7c3aed; }
+    .logo-wordmark { font-family: 'Barlow Condensed', sans-serif; font-weight: 700; font-size: 20px; color: #f0f0f5; letter-spacing: 1px; }
     .card {
-      background: #1a1a1a; border: 1px solid #2e2e2e; border-radius: 12px;
-      padding: 32px 28px; width: 100%; max-width: 420px;
+      background: #1c1c1f; border: 1px solid #303035; border-radius: 12px;
+      padding: 28px 24px; width: 100%; max-width: 440px;
     }
-    h1 { font-size: 22px; color: #ff9900; margin-bottom: 6px; }
-    .sub { color: #888; font-size: 14px; margin-bottom: 24px; }
-    label { display: block; font-size: 13px; color: #aaa; margin-bottom: 4px; margin-top: 16px; }
+    h1 {
+      font-family: 'Barlow Condensed', sans-serif; font-weight: 700;
+      font-size: 22px; letter-spacing: 1px; text-transform: uppercase;
+      color: #f0f0f5; margin-bottom: 4px;
+    }
+    .sub { font-family: 'Share Tech Mono', monospace; font-size: 12px; color: #70707a; margin-bottom: 24px; }
+    .form-label {
+      display: block; font-family: 'Share Tech Mono', monospace;
+      font-size: 11px; letter-spacing: 1px; text-transform: uppercase;
+      color: #70707a; margin-bottom: 6px; margin-top: 18px;
+    }
     select, input[type=text], input[type=password] {
-      width: 100%; padding: 10px 12px;
-      background: #111; color: #e8e8e8;
-      border: 1px solid #333; border-radius: 8px; font-size: 15px;
+      width: 100%; padding: 9px 12px;
+      background: #26262b; color: #f0f0f5;
+      border: 1px solid #303035; border-radius: 8px;
+      font-family: 'Share Tech Mono', monospace; font-size: 14px;
+      outline: none; transition: border-color 0.2s;
     }
-    select:focus, input:focus { outline: none; border-color: #ff9900; }
-    #manual_row { display: none; margin-top: 10px; }
-    button {
-      margin-top: 24px; width: 100%; padding: 13px;
-      background: #ff9900; color: #000; border: none; border-radius: 8px;
-      font-size: 16px; font-weight: 700; cursor: pointer;
+    select:focus, input:focus { border-color: #7c3aed; }
+    #manual_row { display: none; margin-top: 12px; }
+    .btn {
+      margin-top: 24px; width: 100%; padding: 12px;
+      background: #7c3aed; color: #fff;
+      border: 1px solid #7c3aed; border-radius: 4px;
+      font-family: 'Barlow Condensed', sans-serif; font-weight: 700;
+      font-size: 14px; letter-spacing: 2px; text-transform: uppercase;
+      cursor: pointer; transition: box-shadow 0.2s;
     }
-    button:active { background: #cc7700; }
+    .btn:hover { box-shadow: 0 0 16px rgba(124,58,237,0.4); }
+    .btn:active { background: #6d28d9; }
     .msg {
-      margin-top: 20px; padding: 12px 14px; border-radius: 8px;
-      font-size: 14px; line-height: 1.5;
+      margin-top: 18px; padding: 12px 14px; border-radius: 8px;
+      font-family: 'Share Tech Mono', monospace; font-size: 13px; line-height: 1.6;
     }
-    .msg.ok  { background: #0d2b0d; color: #6ef06e; border: 1px solid #2a6b2a; }
-    .msg.err { background: #2b0d0d; color: #f06e6e; border: 1px solid #6b2a2a; }
-    .hint { font-size: 12px; color: #555; margin-top: 20px; line-height: 1.6; }
+    .msg.ok  { background: #052e16; color: #22c55e; border: 1px solid #166534; }
+    .msg.err { background: #2b0d0d; color: #ef4444; border: 1px solid #7f1d1d; }
+    .hint {
+      font-family: 'Share Tech Mono', monospace; font-size: 11px;
+      color: #70707a; margin-top: 20px; line-height: 1.7;
+    }
   </style>
 </head>
 <body>
+<div class="header">
+  <svg class="logo-icon" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+  </svg>
+  <span class="logo-wordmark">SCORATRON</span>
+</div>
+
 <div class="card">
-  <h1>Scoratron Setup</h1>
+  <h1>WiFi Setup</h1>
   <p class="sub">Connect your Scoratron to your home WiFi network.</p>
 
   {% if message %}
@@ -73,7 +106,7 @@ HTML = """<!DOCTYPE html>
 
   {% if not success %}
   <form method="POST" action="/connect">
-    <label>WiFi Network</label>
+    <label class="form-label">WiFi Network</label>
     <select name="ssid_select" id="ssid_select" onchange="toggleManual()">
       <option value="">— Select your network —</option>
       {% for net in networks %}
@@ -83,14 +116,14 @@ HTML = """<!DOCTYPE html>
     </select>
 
     <div id="manual_row">
-      <label>Network name (SSID)</label>
+      <label class="form-label">Network Name (SSID)</label>
       <input type="text" name="ssid_manual" id="ssid_manual" placeholder="e.g. MyHomeWiFi" autocomplete="off">
     </div>
 
-    <label>Password <span style="color:#555">(leave blank for open networks)</span></label>
+    <label class="form-label">Password <span style="text-transform:none;letter-spacing:0">(leave blank for open networks)</span></label>
     <input type="password" name="password" autocomplete="new-password">
 
-    <button type="submit">Connect &amp; Save</button>
+    <button class="btn" type="submit">Connect &amp; Save</button>
   </form>
   {% endif %}
 
@@ -122,13 +155,29 @@ def load_scan():
 
 # ── Routes ─────────────────────────────────────────────────────────────────────
 
+@app.route('/generate_204')
+@app.route('/gen_204')
+def android_204():
+    """Android connectivity check — return redirect instead of 204 to trigger captive portal."""
+    return redirect(f'http://{AP_IP}/', 302)
+
+@app.route('/hotspot-detect.html')
+@app.route('/library/test/success.html')
+def apple_hotspot():
+    """iOS/macOS captive portal detection — return non-standard response to trigger portal."""
+    return redirect(f'http://{AP_IP}/', 302)
+
+@app.route('/connecttest.txt')
+@app.route('/redirect')
+def windows_detect():
+    """Windows captive portal detection."""
+    return redirect(f'http://{AP_IP}/', 302)
+
 @app.route('/', defaults={'path': ''})
 @app.route('/<path:path>')
 def catch_all(path):
     host = request.host.split(':')[0]
     # Captive-portal detection: redirect any non-local host to the setup page.
-    # Devices make requests to known URLs (generate_204, hotspot-detect.html, etc.)
-    # with the original Host header — redirecting them triggers the captive prompt.
     if host != AP_IP:
         return redirect(f'http://{AP_IP}/', 302)
     networks = load_scan()

@@ -29,6 +29,15 @@ ip addr flush dev wlan0 2>/dev/null || true
 echo '{"active": false}' > "$WIFI_SETUP_FILE"
 chmod 666 "$WIFI_SETUP_FILE"
 
+# Remove captive portal iptables rule
+iptables -t nat -D PREROUTING -i wlan0 -p tcp --dport 80 -j DNAT --to-destination 192.168.4.1:80 2>/dev/null || true
+
+# Restore system dnsmasq and web UI
+echo "[do_connect] Restoring system dnsmasq..."
+systemctl start dnsmasq 2>/dev/null || true
+echo "[do_connect] Restoring scoratron-web..."
+systemctl start scoratron-web 2>/dev/null || true
+
 # --- Hand wlan0 back to NetworkManager ---
 echo "[do_connect] Re-enabling NetworkManager on wlan0..."
 nmcli device set wlan0 managed yes

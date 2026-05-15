@@ -22,6 +22,7 @@ apt-get install -y \
     python3 python3-dev python3-venv \
     git gcc g++ make \
     libssl-dev ca-certificates \
+    hostapd dnsmasq \
     --no-install-recommends
 
 # ── 2. Python venv + pip deps ─────────────────────────────────────────────────

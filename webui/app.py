@@ -101,21 +101,25 @@ def fetch_all():
         g = f.fetch_games()
         if g:
             all_games.extend(g)
-    # Drop finished games whose start time is more than 6 hours ago — same
-    # rule as main.py so the dashboard matches what the board displays.
     now_utc = datetime.now(timezone.utc)
-    def is_fresh(g):
-        if g.status != 'post':
-            return True
+    today_local = datetime.now().date()
+
+    def is_visible(g):
         if not g.start_time_utc:
             return True
         try:
             start = datetime.fromisoformat(g.start_time_utc.replace('Z', '+00:00'))
-            return (now_utc - start).total_seconds() < 6 * 3600
         except Exception:
             return True
+        # Drop pre-game games not starting today in local time
+        if g.status == 'pre' and start.astimezone().date() != today_local:
+            return False
+        # Drop finished games whose start time is more than 6 hours ago
+        if g.status == 'post' and (now_utc - start).total_seconds() > 6 * 3600:
+            return False
+        return True
 
-    cache['games'] = [g for g in all_games if is_fresh(g)]
+    cache['games'] = [g for g in all_games if is_visible(g)]
     cache['last_fetch'] = time.time()
 
 def game_to_dict(g):
