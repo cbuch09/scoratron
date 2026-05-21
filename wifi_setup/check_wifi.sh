@@ -11,7 +11,7 @@ chmod 666 "$WIFI_SETUP_FILE"
 
 echo "[wifi-check] Waiting for network (up to 20s)..."
 for i in $(seq 1 20); do
-    if nmcli -t -f DEVICE,STATE device 2>/dev/null | grep -q ":connected"; then
+    if nmcli -t -f DEVICE,STATE device 2>/dev/null | grep -v "^lo:" | grep -qE ":(connected|connecting)"; then
         echo "[wifi-check] Connected after ${i}s — normal startup"
         exit 0
     fi

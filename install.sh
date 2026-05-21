@@ -195,6 +195,11 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
+# ── NetworkManager dispatcher for WiFi setup AP ───────────────────────────────
+echo "==> Installing NetworkManager dispatcher..."
+install -m 755 "$INSTALL_DIR/wifi_setup/nm-dispatcher.sh" \
+    /etc/NetworkManager/dispatcher.d/99-scoratron
+
 systemctl daemon-reload
 systemctl enable scoratron scoratron-web
 systemctl restart scoratron scoratron-web

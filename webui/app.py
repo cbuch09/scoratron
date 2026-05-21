@@ -509,6 +509,23 @@ def api_wifi_forget():
             ['nmcli', 'connection', 'delete', ssid],
             capture_output=True, text=True, timeout=10
         )
+        if result.returncode == 0:
+            # Signal main.py to show the WiFi setup screen
+            try:
+                with open('/tmp/scoratron_wifi_setup.json', 'w') as f:
+                    import json as _json
+                    _json.dump({'active': True}, f)
+            except Exception:
+                pass
+            # Use systemd-run to launch AP in its own transient unit so it
+            # survives scoratron-web being stopped by ap_start.sh
+            ap_script = os.path.join(SCORATRON_DIR, 'wifi_setup', 'ap_start.sh')
+            subprocess.Popen(
+                ['systemd-run', '--no-block', '--unit=scoratron-ap',
+                 '--description=Scoratron WiFi Setup AP',
+                 'bash', ap_script],
+                stdout=open('/tmp/scoratron_wifi_setup.log', 'w'),
+                stderr=subprocess.STDOUT)
         return jsonify({'ok': result.returncode == 0,
                         'msg': (result.stdout or result.stderr).strip()})
     except Exception as e:

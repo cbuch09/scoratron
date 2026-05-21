@@ -1,7 +1,7 @@
 #!/bin/bash
 # ap_start.sh — configures wlan0 as an open AP and runs the captive portal.
-# Called in the background by check_wifi.sh when no network is found.
-# Runs until do_connect.sh kills it (via pkill on captive_portal.py).
+# Called by check_wifi.sh on boot or nm-dispatcher.sh when connectivity is lost.
+# Network scan is done by the caller before this script runs.
 
 set -e
 
@@ -18,31 +18,33 @@ fi
 pkill hostapd 2>/dev/null || true
 pkill -f captive_portal 2>/dev/null || true
 
-# Ensure wlan0 is under NetworkManager so we can scan
-echo "[ap_start] Re-enabling NetworkManager on wlan0 for scan..."
-nmcli device set wlan0 managed yes
-sleep 2
-
-# Scan for nearby networks while wlan0 is in station mode
-echo "[ap_start] Scanning for WiFi networks..."
-nmcli device wifi rescan ifname wlan0 2>/dev/null || true
-sleep 2
-nmcli -t -f SSID device wifi list ifname wlan0 2>/dev/null \
-    | grep -v '^--' | grep -v '^$' | sort -u \
-    > /tmp/scoratron_wifi_scan.txt 2>/dev/null || true
-chmod 644 /tmp/scoratron_wifi_scan.txt 2>/dev/null || true
-echo "[ap_start] Found $(wc -l < /tmp/scoratron_wifi_scan.txt) networks"
+# Scan for nearby networks while wlan0 is still under NetworkManager
+# (skip if scan file was already populated by the dispatcher)
+if [ ! -s /tmp/scoratron_wifi_scan.txt ]; then
+    echo "[ap_start] Scanning for WiFi networks..."
+    nmcli device wifi rescan ifname wlan0 2>/dev/null || true
+    sleep 2
+    nmcli -t -f SSID device wifi list ifname wlan0 2>/dev/null \
+        | grep -v '^--' | grep -v '^$' | sort -u \
+        > /tmp/scoratron_wifi_scan.txt 2>/dev/null || true
+    chmod 644 /tmp/scoratron_wifi_scan.txt 2>/dev/null || true
+    echo "[ap_start] Found $(wc -l < /tmp/scoratron_wifi_scan.txt) networks"
+fi
 
 echo "[ap_start] Taking wlan0 out of NetworkManager..."
 nmcli device set wlan0 managed no
 
-# Clear any existing IP and bring the interface up with a static address
+# Bring interface down so hostapd can take full control of the driver
 ip addr flush dev wlan0
-ip addr add "${AP_IP}/24" dev wlan0
-ip link set wlan0 up
+ip link set wlan0 down
 
 echo "[ap_start] Starting hostapd..."
 hostapd -B "$HOSTAPD_CONF"
+sleep 2
+
+# Add AP IP after hostapd has put the interface in AP mode.
+# Do NOT run ip link set wlan0 up — hostapd already manages the link state.
+ip addr add "${AP_IP}/24" dev wlan0 2>/dev/null || true
 
 # Stop the system dnsmasq so it doesn't hold port 53 on all interfaces
 echo "[ap_start] Stopping system dnsmasq..."
