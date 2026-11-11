@@ -18,9 +18,11 @@ Row layout:
 import time
 import datetime
 import os
+import threading
 from PIL import Image, ImageDraw, ImageFont
 from models import GameState
 from config import (
+    REFRESH_LIMIT_HZ, HARDWARE_MAPPING,
     Config,
     MATRIX_COLS, MATRIX_ROWS,
     COLOR_WHITE, COLOR_BLACK, COLOR_SCORE, COLOR_CLOCK,
@@ -158,11 +160,20 @@ def draw_big_score(draw, score_str, cx, y, color):
         x += char_w
 
 
+# Latest frame is mirrored here so the web UI preview shows exactly what the
+# matrix shows. Written by a background thread at most every MIRROR_INTERVAL s.
+MIRROR_FILE     = '/tmp/scoratron_frame.png'
+MIRROR_INTERVAL = 0.2
+
+
 class ScoreBugRenderer:
     def __init__(self, config: Config):
         self.config = config
         self._matrix = None
         self._offscreen = None
+        self._mirror_img = None
+        self._mirror_dirty = False
+        threading.Thread(target=self._mirror_loop, daemon=True).start()
 
         if HARDWARE_AVAILABLE:
             options = RGBMatrixOptions()
@@ -171,7 +182,9 @@ class ScoreBugRenderer:
             options.chain_length     = 2             # two panels
             options.parallel         = 1
             options.gpio_slowdown    = 3
-            options.hardware_mapping = "adafruit-hat"
+            options.hardware_mapping = HARDWARE_MAPPING
+            options.limit_refresh_rate_hz = REFRESH_LIMIT_HZ  # steady refresh = no flicker
+            options.drop_privileges  = False  # stay root: /home/admin is 0700, daemon user can't read the repo
             options.brightness       = config.brightness
             self._matrix    = RGBMatrix(options=options)
             self._offscreen = self._matrix.CreateFrameCanvas()
@@ -209,14 +222,6 @@ class ScoreBugRenderer:
         draw = ImageDraw.Draw(img)
         draw.text((CX - text_width("No Network", FONT) // 2, 9),  "No Network",  font=FONT, fill=(220, 60, 60))
         draw.text((CX - text_width("Connected", FONT) // 2,  17), "Connected",   font=FONT, fill=(180, 40, 40))
-        self._push(img)
-
-    def draw_no_games(self, sport: str):
-        img  = self._new_image()
-        draw = ImageDraw.Draw(img)
-        msg = f"No {sport.upper()} games right now"
-        w = text_width(msg, FONT)
-        draw.text((CX - w // 2, 13), msg, font=FONT, fill=COLOR_NO_GAME)
         self._push(img)
 
     # ── Weather icon primitives ────────────────────────────────────────────────
@@ -297,65 +302,99 @@ class ScoreBugRenderer:
             else:
                 moon(cx, cy)
 
-    def draw_weather(self, weather: dict):
-        """Display current weather on the LED matrix.
+    def draw_weather(self, weather):
+        """Display current weather (or just the clock if weather is unavailable)."""
+        self._push(self.render_weather_image(weather))
 
-        Layout: [TEMP] [ICON] [CONDITION]
-                    [W:xx DIR  H:xx%  UV:x]
+    def render_weather_image(self, weather) -> Image.Image:
+        """Render the weather/time card without pushing it to the matrix.
+
+        Layout: [TEMP] [ICON] [CONDITION]   (centred, upper half)
+                         [TIME]             (centred, lower half)
+        If weather is None, only the clock is shown, centred on the panel.
         """
         img  = self._new_image()
         draw = ImageDraw.Draw(img)
+        time_str = datetime.datetime.now().strftime("%-I:%M:%S %p")
+
+        if not weather:
+            tw = text_width(time_str, FONT_ABBR)
+            draw.text((CX - tw // 2, 12), time_str, font=FONT_ABBR, fill=COLOR_WHITE)
+            return img
 
         temp_f    = str(weather.get('temp_f', '?'))
         condition = str(weather.get('condition', ''))[:16]
-        humidity  = str(weather.get('humidity', '?'))
-        wind_mph  = str(weather.get('wind_mph', '?'))
-        wind_dir  = str(weather.get('wind_dir', ''))
-        uv        = str(weather.get('uv_index', ''))
         code      = int(weather.get('weather_code', 0))
         is_day    = int(weather.get('is_day', 1))
 
-        # Row 1: [TEMP] [ICON] [CONDITION] — all centred as a group
-        # Row 2: wind/humidity/UV — centred, y=17
-        # Row 3: time — centred, y=24
         ICON_R  = 8          # bounding radius (rays / cloud extent)
         GAP     = 3          # pixels between elements
+        ROW1_CY = 11         # vertical centre of the temp/icon/condition row
+        TIME_Y  = 23         # top of the clock text
 
+        # Row 1: [TEMP] [ICON] [CONDITION] — centred as a group
         temp_str = f"{temp_f}F"
         tw       = text_width(temp_str, FONT_ABBR)
         cond_w   = text_width(condition, FONT_ABBR)
         row1_w   = tw + GAP + 2 * ICON_R + GAP + cond_w
         row1_x   = CX - row1_w // 2
+        text_y   = ROW1_CY - 1
 
-        # Temperature
-        draw.text((row1_x, 7), temp_str, font=FONT_ABBR, fill=(255, 220, 80))
+        draw.text((row1_x, text_y), temp_str, font=FONT_ABBR, fill=(255, 220, 80))
 
-        # Icon
         icon_cx = row1_x + tw + GAP + ICON_R
-        icon_cy = 8
-        self._wx_icon(draw, code, is_day, icon_cx, icon_cy)
+        self._wx_icon(draw, code, is_day, icon_cx, ROW1_CY)
 
-        # Condition
         cond_x = icon_cx + ICON_R + GAP
-        cond_y = icon_cy - 1
-        draw.text((cond_x, cond_y), condition, font=FONT_ABBR, fill=COLOR_WHITE)
+        draw.text((cond_x, text_y), condition, font=FONT_ABBR, fill=COLOR_WHITE)
 
-        # Wind + humidity + UV — centred, y=17
-        wind_str = f"W:{wind_mph}"
-        if wind_dir:
-            wind_str += f" {wind_dir}"
-        info = f"{wind_str}  H:{humidity}%"
-        if uv and uv != '0':
-            info += f"  UV:{uv}"
-        iw = text_width(info, FONT)
-        draw.text((CX - iw // 2, 17), info, font=FONT, fill=COLOR_CLOCK)
-
-        # Time with seconds — centred, y=24
-        time_str = datetime.datetime.now().strftime("%-I:%M:%S %p")
+        # Row 2: time with seconds — centred
         tw2 = text_width(time_str, FONT)
-        draw.text((CX - tw2 // 2, 24), time_str, font=FONT, fill=COLOR_WHITE)
+        draw.text((CX - tw2 // 2, TIME_Y), time_str, font=FONT, fill=COLOR_WHITE)
+        return img
 
+    def draw_ip_address(self, ip: str):
+        """Show the device's IP address (used briefly after boot)."""
+        img  = self._new_image()
+        draw = ImageDraw.Draw(img)
+        line1 = "WiFi IP Address"
+        draw.text((CX - text_width(line1, FONT) // 2, 8), line1, font=FONT, fill=(255, 140, 0))
+        draw.text((CX - text_width(ip, FONT_ABBR) // 2, 17), ip, font=FONT_ABBR, fill=COLOR_WHITE)
         self._push(img)
+
+    def draw_connecting(self):
+        img  = self._new_image()
+        draw = ImageDraw.Draw(img)
+        msg = "Connecting to WiFi..."
+        draw.text((CX - text_width(msg, FONT) // 2, 13), msg, font=FONT, fill=COLOR_NO_GAME)
+        self._push(img)
+
+    def clear(self):
+        """Blank the display."""
+        if HARDWARE_AVAILABLE and self._matrix:
+            self._matrix.Clear()
+        self.mirror_frame(self._new_image())
+
+    # ── Web UI preview mirror ─────────────────────────────────────────────────
+
+    def mirror_frame(self, img):
+        """Record a frame that was just shown on the matrix."""
+        self._mirror_img = img.copy()
+        self._mirror_dirty = True
+
+    def _mirror_loop(self):
+        tmp = MIRROR_FILE + '.tmp'
+        while True:
+            time.sleep(MIRROR_INTERVAL)
+            if not self._mirror_dirty:
+                continue
+            self._mirror_dirty = False
+            img = self._mirror_img
+            try:
+                img.save(tmp, format='PNG')
+                os.replace(tmp, MIRROR_FILE)
+            except Exception as e:
+                print(f'[mirror] write error: {e}')
 
     def draw_wifi_setup(self):
         """Show WiFi setup instructions on the LED matrix."""
@@ -667,6 +706,7 @@ class ScoreBugRenderer:
         return Image.new("RGB", (MATRIX_COLS, MATRIX_ROWS), (0, 0, 0))
 
     def _push(self, img):
+        self.mirror_frame(img)
         if HARDWARE_AVAILABLE and self._matrix:
             self._offscreen.SetImage(img)
             self._offscreen = self._matrix.SwapOnVSync(self._offscreen)

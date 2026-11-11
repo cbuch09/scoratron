@@ -6,6 +6,7 @@ import signal
 import os
 import json
 import socket
+import subprocess
 import requests
 from datetime import datetime, timezone
 from renderer import ScoreBugRenderer
@@ -155,6 +156,57 @@ def load_parade_active():
         pass
     return False
 
+DISPLAY_FILE = '/tmp/scoratron_display.json'
+
+def load_display_on():
+    """Screen power state set from the web UI System tab (default: on)."""
+    try:
+        if os.path.exists(DISPLAY_FILE):
+            with open(DISPLAY_FILE) as f:
+                return json.load(f).get('on', True)
+    except Exception:
+        pass
+    return True
+
+# Marker lives in /tmp (tmpfs), so it is cleared on every reboot — the IP is
+# shown once per boot, not on every service restart from the web UI.
+BOOT_IP_MARKER = '/tmp/scoratron_boot_ip_shown'
+BOOT_IP_SECONDS = 10
+BOOT_IP_WAIT = 30   # max seconds to wait for wlan0 to get an address
+
+def get_wifi_ip():
+    """Return the IPv4 address of wlan0, or None."""
+    try:
+        out = subprocess.check_output(['ip', '-4', '-o', 'addr', 'show', 'wlan0'],
+                                      stderr=subprocess.DEVNULL, text=True)
+        for part in out.split():
+            if '/' in part and part.count('.') == 3:
+                return part.split('/')[0]
+    except Exception:
+        pass
+    return None
+
+def show_boot_ip(renderer):
+    """After a fresh boot, show the WiFi IP on the matrix for ~10s."""
+    if os.path.exists(BOOT_IP_MARKER) or load_wifi_setup_active():
+        return
+    try:
+        open(BOOT_IP_MARKER, 'w').close()
+    except Exception:
+        pass
+    ip = get_wifi_ip()
+    deadline = time.time() + BOOT_IP_WAIT
+    while not ip and time.time() < deadline and not load_wifi_setup_active():
+        renderer.draw_connecting()
+        time.sleep(1)
+        ip = get_wifi_ip()
+    if not ip:
+        print('[boot] no WiFi IP found — skipping IP display')
+        return
+    print(f'[boot] showing WiFi IP {ip} for {BOOT_IP_SECONDS}s')
+    renderer.draw_ip_address(ip)
+    time.sleep(BOOT_IP_SECONDS)
+
 _weather_cache = {'data': None, 'last_fetch': 0}
 WEATHER_TTL = 900  # 15 minutes
 
@@ -208,9 +260,30 @@ def _fetch_weather_at(lat, lon, label):
         print(f'[weather] fetch error: {e}')
         return None
 
-def get_weather(zip_code):
+WEATHER_RETRY = 300   # seconds to wait after a failed lookup before trying again
+_weather_fail = {'last': 0}
+_ip_location = {}     # cached {lat, lon, label} — geolocate once per run
+
+def _weather_backoff():
+    """True if a recent lookup failed and we should not hit the APIs yet."""
+    return time.time() - _weather_fail['last'] < WEATHER_RETRY
+
+def _weather_cached():
     now = time.time()
-    if now - _weather_cache['last_fetch'] < WEATHER_TTL and _weather_cache['data']:
+    if _weather_cache['data'] and now - _weather_cache['last_fetch'] < WEATHER_TTL:
+        return True
+    return _weather_backoff()
+
+def _store_weather(data):
+    if data:
+        _weather_cache['data'] = data
+        _weather_cache['last_fetch'] = time.time()
+    else:
+        _weather_fail['last'] = time.time()
+    return _weather_cache['data']
+
+def get_weather(zip_code):
+    if _weather_cached():
         return _weather_cache['data']
     try:
         geo = requests.get(
@@ -222,42 +295,46 @@ def get_weather(zip_code):
         results = geo.json().get('results')
         if not results:
             print(f'[weather] zip {zip_code!r} not found')
-            return _weather_cache['data']
+            return _store_weather(None)
         lat = results[0]['latitude']
         lon = results[0]['longitude']
-        data = _fetch_weather_at(lat, lon, zip_code)
-        if data:
-            _weather_cache['data'] = data
-            _weather_cache['last_fetch'] = now
-        return _weather_cache['data']
+        return _store_weather(_fetch_weather_at(lat, lon, zip_code))
     except Exception as e:
         print(f'[weather] fetch error: {e}')
-        return _weather_cache['data']
+        return _store_weather(None)
+
+def _geolocate_ip():
+    """Find approximate location from public IP. Tries two free services."""
+    if _ip_location:
+        return _ip_location
+    services = [
+        ('https://ipapi.co/json/', lambda j: (j.get('latitude'), j.get('longitude'), j.get('city'))),
+        ('https://ipwho.is/',      lambda j: (j.get('latitude'), j.get('longitude'), j.get('city'))
+                                             if j.get('success', True) else (None, None, None)),
+    ]
+    for url, parse in services:
+        try:
+            r = requests.get(url, timeout=10, verify=_CERT)
+            r.raise_for_status()
+            lat, lon, city = parse(r.json())
+            if lat is not None and lon is not None:
+                _ip_location.update(lat=lat, lon=lon, label=city or 'Auto')
+                print(f'[weather] located via {url}: {city} ({lat}, {lon})')
+                return _ip_location
+            print(f'[weather] {url} returned no coordinates')
+        except Exception as e:
+            print(f'[weather] IP geolocation error ({url}): {e}')
+    return None
 
 def get_weather_by_ip():
     """Geolocate via public IP and fetch weather. Uses the same cache as get_weather()."""
-    now = time.time()
-    if now - _weather_cache['last_fetch'] < WEATHER_TTL and _weather_cache['data']:
+    if _weather_cached():
         return _weather_cache['data']
-    try:
-        geo = requests.get('https://ipapi.co/json/', timeout=10, verify=_CERT)
-        geo.raise_for_status()
-        info = geo.json()
-        lat = info.get('latitude')
-        lon = info.get('longitude')
-        if lat is None or lon is None:
-            print('[weather] IP geolocation returned no coordinates')
-            return _weather_cache['data']
-        city = info.get('city', '')
-        label = city or 'Auto'
-        data = _fetch_weather_at(lat, lon, label)
-        if data:
-            _weather_cache['data'] = data
-            _weather_cache['last_fetch'] = now
-        return _weather_cache['data']
-    except Exception as e:
-        print(f'[weather] IP geolocation error: {e}')
-        return _weather_cache['data']
+    loc = _geolocate_ip()
+    if not loc:
+        print(f'[weather] location unknown — retrying in {WEATHER_RETRY}s (set a ZIP in the web UI to skip IP lookup)')
+        return _store_weather(None)
+    return _store_weather(_fetch_weather_at(loc['lat'], loc['lon'], loc['label']))
 
 def load_sim_game():
     path = '/tmp/scoratron_sim.json'
@@ -327,6 +404,7 @@ def main():
     print(f"Scroll: {args.scroll} | Refresh: {args.refresh}s | Brightness: {args.brightness}%")
 
     renderer = ScoreBugRenderer(config)
+    show_boot_ip(renderer)
     current_game_idx = 0
     last_fetch = 0
     last_scroll_time = time.time()
@@ -341,6 +419,7 @@ def main():
 
 
     applied_brightness = args.brightness
+    display_was_on = True
 
     while True:
         now = time.time()
@@ -363,6 +442,18 @@ def main():
             time.sleep(1)
             continue
 
+        # Screen turned off from the web UI — keep the matrix blank
+        if not load_display_on():
+            if display_was_on:
+                renderer.clear()
+                display_was_on = False
+                print('[display] screen off')
+            time.sleep(0.5)
+            continue
+        if not display_was_on:
+            display_was_on = True
+            print('[display] screen on')
+
         # Check if logo parade is active — run it inline on our matrix
         if load_parade_active():
             from logo_parade import run_parade_on_matrix
@@ -376,11 +467,12 @@ def main():
                 renderer._offscreen = run_parade_on_matrix(
                     renderer._matrix, renderer._offscreen,
                     sport=_sport,
-                    stop_fn=lambda: not load_parade_active(),
+                    stop_fn=lambda: not load_parade_active() or not load_display_on(),
+                    on_frame=renderer.mirror_frame,
                 )
             else:
                 # Preview mode — just wait
-                while load_parade_active():
+                while load_parade_active() and load_display_on():
                     time.sleep(0.5)
             continue
 
@@ -433,35 +525,28 @@ def main():
             linger_until = {gid: t for gid, t in linger_until.items()
                             if t == 0 or now - t < 86400}
 
-            # Priority: live → lingering finals → upcoming (once first game within 60 min)
+            # Priority: live games take over the board. Otherwise show lingering
+            # finals plus today's upcoming games (rotated with the weather card).
             live     = [g for g in new_games if g.is_live]
             finished = [g for g in new_games if g.status == "post"]
             upcoming = [g for g in new_games if g.status == "pre"]
 
             if live:
                 games = live
-            elif finished:
-                games = finished
-            elif upcoming:
-                from datetime import datetime as _dt, timezone as _tz, timedelta as _td
-                _now = _dt.now(_tz.utc)
-                _cutoff = _now + _td(minutes=60)
-                def _start(g):
-                    if not g.start_time_utc:
-                        return _now
-                    try:
-                        return _dt.fromisoformat(g.start_time_utc.replace("Z", "+00:00"))
-                    except Exception:
-                        return _now
-                earliest_start = min(_start(g) for g in upcoming)
-                if earliest_start <= _cutoff:
-                    # Show all games on the same local calendar day as the first game
-                    first_day = earliest_start.astimezone().date()
-                    games = [g for g in upcoming if _start(g).astimezone().date() == first_day]
-                else:
-                    games = []
             else:
-                games = []
+                today = datetime.now().astimezone().date()
+                def _local_day(g):
+                    if not g.start_time_utc:
+                        return None
+                    try:
+                        return datetime.fromisoformat(
+                            g.start_time_utc.replace("Z", "+00:00")).astimezone().date()
+                    except Exception:
+                        return None
+                todays_upcoming = sorted(
+                    (g for g in upcoming if _local_day(g) == today),
+                    key=lambda g: g.start_time_utc or "")
+                games = finished + todays_upcoming
 
             print(f"Refreshed: {len(games)} displayable games (live={len(live)} finished={len(finished)} upcoming={len(upcoming)})")
             last_fetch = now
@@ -542,62 +627,78 @@ def main():
                 time.sleep(1)
                 continue
 
+        def current_weather():
+            return get_weather(zip_code) if zip_code else get_weather_by_ip()
+
+        # No games today — weather/time card only
         if not games:
-            weather = get_weather(zip_code) if zip_code else get_weather_by_ip()
+            weather = current_weather()
+            renderer.draw_weather(weather)
             if weather:
-                renderer.draw_weather(weather)
                 write_weather_preview(weather)
-                time.sleep(1)
-                continue
-            renderer.draw_no_games(args.sport if args.sport != "auto" else "NBA/NFL")
-            time.sleep(5)
+            time.sleep(0.5)
             continue
 
-        # Pick game to show — check for pinned game from web UI first
         pinned_id = webui.get('pinned_game') if webui else None
-        if pinned_id:
-            pinned_matches = [i for i, g in enumerate(games) if g.game_id == pinned_id]
-            idx = pinned_matches[0] if pinned_matches else current_game_idx % len(games)
-        elif config.game_index is not None:
-            idx = min(config.game_index, len(games) - 1)
-        else:
-            idx = current_game_idx % len(games)
 
-        game = games[idx]
-
-        # Check for score change and flash
-        prev = last_scores.get(game.game_id)
-        if prev and game.is_live:
-            prev_away, prev_home = prev
-            if game.away.score > prev_away:
-                renderer.flash_score(game, 'away')
-            elif game.home.score > prev_home:
-                renderer.flash_score(game, 'home')
-
-        last_scores[game.game_id] = (game.away.score, game.home.score)
-
-        # Continuous scroll mode
+        # Continuous scroll mode (games only)
         if webui and webui.get('continuous_scroll') and len(games) > 1 and not pinned_id:
             if scroll_strip is None:
                 scroll_strip = renderer.render_game_strip(games)
             renderer.push_scroll_frame(scroll_strip, scroll_offset)
             scroll_offset = (scroll_offset + 1) % scroll_strip.width
-            write_preview(games[idx])
+            write_preview(games[current_game_idx % len(games)])
             time.sleep(0.03)
             continue
 
-        renderer.draw_game(games[idx])
-        write_preview(games[idx])
+        # Rotation slots: each game, plus a weather/time card when nothing is live
+        WEATHER_SLOT = 'weather'
+        slots = list(games)
+        if not any(g.is_live for g in games):
+            slots.append(WEATHER_SLOT)
 
-        # Dwell scroll — transition to next game after scroll_dwell seconds
+        # Pick slot to show — pinned game from web UI wins
+        if pinned_id:
+            pinned_matches = [i for i, g in enumerate(games) if g.game_id == pinned_id]
+            idx = pinned_matches[0] if pinned_matches else current_game_idx % len(slots)
+        elif config.game_index is not None:
+            idx = min(config.game_index, len(games) - 1)
+        else:
+            idx = current_game_idx % len(slots)
+
+        def render_slot(slot):
+            if slot == WEATHER_SLOT:
+                return renderer.render_weather_image(current_weather())
+            return renderer.render_game_image(slot)
+
+        slot = slots[idx]
+        if slot == WEATHER_SLOT:
+            weather = current_weather()
+            renderer.draw_weather(weather)
+            if weather:
+                write_weather_preview(weather)
+        else:
+            game = slot
+            # Check for score change and flash
+            prev = last_scores.get(game.game_id)
+            if prev and game.is_live:
+                prev_away, prev_home = prev
+                if game.away.score > prev_away:
+                    renderer.flash_score(game, 'away')
+                elif game.home.score > prev_home:
+                    renderer.flash_score(game, 'home')
+            last_scores[game.game_id] = (game.away.score, game.home.score)
+            renderer.draw_game(game)
+            write_preview(game)
+
+        # Dwell scroll — transition to next slot after scroll_dwell seconds
         scroll_on    = webui.get('scroll', args.scroll) if webui else args.scroll
         scroll_dwell = webui.get('scroll_dwell', config.scroll_dwell) if webui else config.scroll_dwell
-        if scroll_on and len(games) > 1 and not pinned_id:
+        if scroll_on and len(slots) > 1 and not pinned_id and config.game_index is None:
             if now - last_scroll_time >= scroll_dwell:
-                old_img = renderer.render_game_image(games[idx])
-                current_game_idx = (current_game_idx + 1) % len(games)
-                new_idx = current_game_idx % len(games)
-                new_img = renderer.render_game_image(games[new_idx])
+                old_img = render_slot(slot)
+                current_game_idx = (current_game_idx + 1) % len(slots)
+                new_img = render_slot(slots[current_game_idx])
                 renderer.animate_scroll_transition(old_img, new_img)
                 last_scroll_time = now
 

@@ -19,7 +19,7 @@ sys.path.insert(0, '/home/admin/scoratron')
 os.chdir('/home/admin/scoratron')
 
 from PIL import Image, ImageDraw, ImageFont
-from config import MATRIX_COLS, MATRIX_ROWS, TEAM_COLORS
+from config import MATRIX_COLS, MATRIX_ROWS, TEAM_COLORS, REFRESH_LIMIT_HZ, HARDWARE_MAPPING
 
 try:
     from rgbmatrix import RGBMatrix, RGBMatrixOptions
@@ -100,7 +100,9 @@ def run_parade(sport="nba", brightness=60, loop=True):
         options.chain_length     = 2
         options.parallel         = 1
         options.gpio_slowdown    = 3
-        options.hardware_mapping = "adafruit-hat"
+        options.hardware_mapping = HARDWARE_MAPPING
+        options.limit_refresh_rate_hz = REFRESH_LIMIT_HZ  # steady refresh = no flicker
+        options.drop_privileges  = False  # stay root: /home/admin is 0700, daemon user can't read the repo
         options.brightness       = brightness
         matrix   = RGBMatrix(options=options)
         canvas   = matrix.CreateFrameCanvas()
@@ -192,7 +194,7 @@ def run_parade(sport="nba", brightness=60, loop=True):
         matrix.Clear()
 
 
-def run_parade_on_matrix(matrix, canvas, sport="nba", stop_fn=None):
+def run_parade_on_matrix(matrix, canvas, sport="nba", stop_fn=None, on_frame=None):
     """
     Run the logo parade using an already-initialised RGBMatrix + canvas.
     stop_fn() is called each frame; returning True exits the loop.
@@ -236,10 +238,14 @@ def run_parade_on_matrix(matrix, canvas, sport="nba", stop_fn=None):
         frame  = strip.crop((offset, 0, offset + MATRIX_COLS, MATRIX_ROWS))
         canvas.SetImage(frame)
         canvas = matrix.SwapOnVSync(canvas)
+        if on_frame:
+            on_frame(frame)
         offset = (offset + SCROLL_SPEED) % loop_width
         time.sleep(FRAME_DELAY)
 
     matrix.Clear()
+    if on_frame:
+        on_frame(Image.new("RGB", (MATRIX_COLS, MATRIX_ROWS), (0, 0, 0)))
     return canvas   # caller may need the swapped canvas reference
 
 

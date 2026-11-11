@@ -13,6 +13,19 @@ MATRIX_PARALLEL = 1
 # rpi-rgb-led-matrix slowdown value (3 = Pi 4, use 4 if you see glitching)
 GPIO_SLOWDOWN = 3
 
+# Adafruit RGB Matrix Bonnet with the GPIO4<->GPIO18 jumper soldered: the
+# "-pwm" mapping uses the Pi's hardware PWM for pulse timing, which removes the
+# shimmer/flicker of software timing. Use "adafruit-hat" if the jumper is absent
+# (with "-pwm" and no working jumper the panels stay completely dark).
+HARDWARE_MAPPING = "adafruit-hat"
+
+# Cap the panel refresh rate so every refresh takes the same time (steady
+# brightness). Measured on Pi 4 + bonnet, 2x 64x32 panels, under load:
+#   adafruit-hat     (software timing): uncapped ~75-200 Hz; 120 Hz held steady
+#   adafruit-hat-pwm (hardware timing): uncapped ~190-240 Hz; 180 Hz held steady
+# 0 = no cap.
+REFRESH_LIMIT_HZ = 180 if HARDWARE_MAPPING.endswith("-pwm") else 120
+
 # ── Layout zones (in pixels) ──────────────────────────────────────────────────
 # [LOGO_A | SCORE/INFO | LOGO_B]
 LOGO_WIDTH    = 16   # pixels wide per team logo

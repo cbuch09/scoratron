@@ -11,7 +11,7 @@ import time
 import glob as glob_mod
 import subprocess
 from datetime import datetime, timezone, timedelta
-from flask import Flask, jsonify, request, send_from_directory, Response, stream_with_context
+from flask import Flask, jsonify, request, send_from_directory, send_file, Response, stream_with_context
 import requests as req
 try:
     from PIL import Image
@@ -618,6 +618,35 @@ def api_parade_stop():
         json.dump({'active': False}, f)
     os.chmod(PARADE_FILE, 0o666)
     return jsonify({'ok': True})
+
+DISPLAY_FILE = '/tmp/scoratron_display.json'
+FRAME_FILE = '/tmp/scoratron_frame.png'   # written by renderer.py — exact matrix contents
+
+@app.route('/api/frame.png')
+def api_frame():
+    if not os.path.exists(FRAME_FILE):
+        return ('', 404)
+    resp = send_file(FRAME_FILE, mimetype='image/png', max_age=0)
+    resp.headers['Cache-Control'] = 'no-store'
+    return resp
+
+
+@app.route('/api/display', methods=['GET'])
+def api_display_get():
+    try:
+        with open(DISPLAY_FILE) as f:
+            on = json.load(f).get('on', True)
+    except Exception:
+        on = True
+    return jsonify({'on': on})
+
+@app.route('/api/display', methods=['POST'])
+def api_display_set():
+    on = bool((request.json or {}).get('on', True))
+    with open(DISPLAY_FILE, 'w') as f:
+        json.dump({'on': on}, f)
+    os.chmod(DISPLAY_FILE, 0o666)
+    return jsonify({'ok': True, 'on': on})
 
 @app.route('/api/parade/status')
 def api_parade_status():

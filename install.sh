@@ -147,6 +147,11 @@ else
     echo "    WARNING: cmdline.txt not found — add isolcpus=3 manually"
 fi
 
+# Blacklist the onboard sound driver — rpi-rgb-led-matrix docs: it interferes
+# with the matrix timing even when audio is disabled in config.txt
+echo "blacklist snd_bcm2835" > /etc/modprobe.d/blacklist-rgb-matrix.conf
+echo "    snd_bcm2835 blacklisted"
+
 echo "    NOTE: reboot required for hardware tuning to take effect"
 
 # ── 7. Logo directories ───────────────────────────────────────────────────────
@@ -197,8 +202,16 @@ EOF
 
 # ── NetworkManager dispatcher for WiFi setup AP ───────────────────────────────
 echo "==> Installing NetworkManager dispatcher..."
-install -m 755 "$INSTALL_DIR/wifi_setup/nm-dispatcher.sh" \
-    /etc/NetworkManager/dispatcher.d/99-scoratron
+if [ -f "$INSTALL_DIR/wifi_setup/nm-dispatcher.sh" ]; then
+    install -m 755 "$INSTALL_DIR/wifi_setup/nm-dispatcher.sh" \
+        /etc/NetworkManager/dispatcher.d/99-scoratron
+else
+    echo "    nm-dispatcher.sh not present — skipping"
+fi
+
+# ── WiFi setup (captive portal on boot when no network) ──────────────────────
+echo "==> Installing WiFi setup service..."
+bash "$INSTALL_DIR/wifi_setup/install.sh"
 
 systemctl daemon-reload
 systemctl enable scoratron scoratron-web

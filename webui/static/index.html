@@ -1105,6 +1105,15 @@ pre {
     <div style="color:#404060;font-family:var(--mono);font-size:13px">Loading...</div>
   </div>
 
+  <div class="section-label">// display</div>
+  <div class="control-card" style="max-width:260px;margin:12px 0 28px">
+    <div class="control-label">LED Screen</div>
+    <div class="toggle" onclick="toggleDisplay()">
+      <div class="toggle-track" id="display-toggle"><div class="toggle-thumb"></div></div>
+      <span class="toggle-label" id="display-label">On</span>
+    </div>
+  </div>
+
   <div class="section-label">// service controls</div>
   <div class="flex-row mt16" style="margin-bottom:28px">
     <button class="btn btn-warning" onclick="restartService()">Restart Service</button>
@@ -1373,11 +1382,6 @@ let previewInterval = null;
 let scrollEnabled = true;
 let continuousScrollEnabled = false;
 
-// ── Preview animation state ──────────────────────────────────────────────────
-let previewGameId   = null;   // game_id currently shown
-let previewScores   = {};     // gameId → {away, home} for flash detection
-let previewScrolling = false; // true while scroll animation is running
-
 // ── Navigation ──────────────────────────────────────────────────────────────
 function showPage(id) {
   document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
@@ -1385,7 +1389,7 @@ function showPage(id) {
   document.getElementById('page-' + id).classList.add('active');
   event.target.classList.add('active');
   if (id === 'apidata') loadApiData();
-  if (id === 'system') { loadSysInfo(); startLogStream(); }
+  if (id === 'system') { loadSysInfo(); loadDisplayState(); startLogStream(); }
   else stopLogStream();
   if (id === 'parade') loadParadeStatus();
   if (id === 'weather') loadWeatherPage();
@@ -1405,439 +1409,6 @@ function toast(msg, err=false) {
 // ── Matrix Preview ───────────────────────────────────────────────────────────
 function rgbToHex(r, g, b) {
   return '#' + [r,g,b].map(x => x.toString(16).padStart(2,'0')).join('');
-}
-
-// Render a game to an offscreen canvas, returns a Promise<canvas>
-function drawMatrixOffscreen(game) {
-  return new Promise(resolve => {
-    const oc = document.createElement('canvas');
-    oc.width  = W * PIXEL_SCALE;
-    oc.height = H * PIXEL_SCALE;
-    if (!game) {
-      const ctx = oc.getContext('2d');
-      ctx.fillStyle = '#000';
-      ctx.fillRect(0, 0, oc.width, oc.height);
-      resolve(oc);
-      return;
-    }
-    if (game.mode === 'weather') {
-      drawWeatherMatrix(game, oc);
-      resolve(oc);
-      return;
-    }
-    const awayImg = new Image();
-    const homeImg = new Image();
-    let n = 0;
-    const done = () => { if (++n === 2) { renderMatrix(game, awayImg, homeImg, oc); resolve(oc); } };
-    awayImg.onload = awayImg.onerror = done;
-    homeImg.onload = homeImg.onerror = done;
-    awayImg.src = `/logos/${game.sport}/${game.away.abbreviation}.png`;
-    homeImg.src = `/logos/${game.sport}/${game.home.abbreviation}.png`;
-  });
-}
-
-// Scroll the preview from one canvas to another (left-to-right slide)
-function animatePreviewScroll(fromCanvas, toCanvas) {
-  previewScrolling = true;
-  const main    = document.getElementById('matrix-preview');
-  const ctx     = main.getContext('2d');
-  const W_PX    = W * PIXEL_SCALE;
-  const H_PX    = H * PIXEL_SCALE;
-  const duration = 450;
-  const t0 = performance.now();
-
-  function frame(now) {
-    const t    = Math.min((now - t0) / duration, 1);
-    const ease = 1 - Math.pow(1 - t, 3);        // ease-out cubic
-    const off  = Math.round(ease * W_PX);
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, W_PX, H_PX);
-    ctx.drawImage(fromCanvas, -off, 0);
-    ctx.drawImage(toCanvas,  W_PX - off, 0);
-    if (t < 1) {
-      requestAnimationFrame(frame);
-    } else {
-      ctx.drawImage(toCanvas, 0, 0);
-      previewScrolling = false;
-    }
-  }
-  requestAnimationFrame(frame);
-}
-
-// Flash just the score digits 3 times, matching renderer.py flash_score()
-function animatePreviewFlash(side, game) {
-  const main  = document.getElementById('matrix-preview');
-  const ctx   = main.getContext('2d');
-  const S     = PIXEL_SCALE;
-  const BAR_W = 20;
-  const AWAY_CX = BAR_W + 22;
-  const HOME_CX = W - BAR_W - 22;
-
-  const cx    = side === 'away' ? AWAY_CX : HOME_CX;
-  const score = side === 'away' ? game.away.score : game.home.score;
-  const n     = String(score).length;
-  const scoreW = n * 8 - 2;
-  // Match renderer blank region: [cx - scoreW//2 - 1, 6, cx + scoreW - scoreW//2, 15]
-  const bx = (cx - Math.floor(scoreW / 2) - 1) * S;
-  const by = 6 * S;
-  const bw = (scoreW + 2) * S;
-  const bh = 10 * S;
-
-  // Save the fully-rendered frame so we can restore it between blinks
-  const saved = ctx.getImageData(0, 0, main.width, main.height);
-
-  let tick = 0;
-  const interval = setInterval(() => {
-    if (tick % 2 === 0) {
-      // Blank phase — black out just the score region
-      ctx.putImageData(saved, 0, 0);
-      ctx.fillStyle = '#000';
-      ctx.fillRect(bx, by, bw, bh);
-    } else {
-      // Restore phase
-      ctx.putImageData(saved, 0, 0);
-    }
-    tick++;
-    if (tick >= 6) clearInterval(interval); // 3 blinks (3 blank + 3 restore)
-  }, 150);
-}
-
-function drawMatrix(game) {
-  if (!game) {
-    const canvas = document.getElementById('matrix-preview');
-    const ctx = canvas.getContext('2d');
-    canvas.width = W * PIXEL_SCALE;
-    canvas.height = H * PIXEL_SCALE;
-    ctx.fillStyle = '#000';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    return;
-  }
-
-  if (game.mode === 'weather') {
-    drawWeatherMatrix(game);
-    return;
-  }
-
-  const awayImg = new Image();
-  const homeImg = new Image();
-  let loaded = 0;
-
-  const onBothLoaded = () => {
-    loaded++;
-    if (loaded === 2) renderMatrix(game, awayImg, homeImg);
-  };
-
-  awayImg.onload = onBothLoaded;
-  homeImg.onload = onBothLoaded;
-  awayImg.onerror = onBothLoaded;
-  homeImg.onerror = onBothLoaded;
-
-  awayImg.src = `/logos/${game.sport}/${game.away.abbreviation}.png`;
-  homeImg.src = `/logos/${game.sport}/${game.home.abbreviation}.png`;
-}
-
-function drawWeatherMatrix(w, targetCanvas) {
-  const canvas = targetCanvas || document.getElementById('matrix-preview');
-  const ctx = canvas.getContext('2d');
-  const S = PIXEL_SCALE;
-  canvas.width = W * S;
-  canvas.height = H * S;
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, canvas.width, canvas.height);
-
-  // Use canvas text scaled to match the physical display's small fonts
-  function pxText(txt, x, y, color, size) {
-    ctx.font = `${size * S}px monospace`;
-    ctx.fillStyle = color;
-    ctx.textAlign = 'left';
-    ctx.textBaseline = 'top';
-    ctx.fillText(txt, x * S, y * S);
-  }
-  function pxTextCentered(txt, y, color, size) {
-    ctx.font = `${size * S}px monospace`;
-    ctx.fillStyle = color;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    ctx.fillText(txt, (W / 2) * S, y * S);
-  }
-
-  // Row 1 (y=5): temp + condition  — FONT_ABBR ≈ 7px tall
-  pxText(`${w.temp_f}F`, 34, 5, '#ffdc50', 6);
-  pxText(w.condition || '', 72, 5, '#ffffff', 6);
-
-  // Row 2 (y=15): wind / humidity / UV  — FONT ≈ 5px tall
-  let info = `W:${w.wind_mph}`;
-  if (w.wind_dir) info += ` ${w.wind_dir}`;
-  info += `  H:${w.humidity}%`;
-  if (w.uv_index && w.uv_index !== '0') info += `  UV:${w.uv_index}`;
-  pxTextCentered(info, 15, '#64b4ff', 5);
-
-  // Row 3 (y=22): time with seconds
-  pxTextCentered(w.time || '', 22, '#ffffff', 5);
-}
-
-// Render a game frame to any canvas (defaults to #matrix-preview)
-function renderMatrix(game, awayImg, homeImg, targetCanvas) {
-  const canvas = targetCanvas || document.getElementById('matrix-preview');
-  const ctx = canvas.getContext('2d');
-  const S = PIXEL_SCALE;
-
-  canvas.width  = W * S;
-  canvas.height = H * S;
-
-  // Black background
-  ctx.fillStyle = '#000';
-  ctx.fillRect(0, 0, W * S, H * S);
-
-  const BAR_W = 20;
-  const CX = W / 2;
-  const LEFT_EDGE = BAR_W;
-  const RIGHT_EDGE = W - BAR_W;
-  const AWAY_CX = BAR_W + 22;
-  const HOME_CX = W - BAR_W - 22;
-
-  const awayColor = rgbToHex(...game.away.color);
-  const homeColor = rgbToHex(...game.home.color);
-
-  // Logos — 18×18, 1px side and top margin within 20px bar
-  const LOGO_W = 18;
-  ctx.imageSmoothingEnabled = false;
-  if (awayImg && awayImg.naturalWidth > 0)
-    ctx.drawImage(awayImg, 1 * S, 1 * S, LOGO_W * S, LOGO_W * S);
-  if (homeImg && homeImg.naturalWidth > 0)
-    ctx.drawImage(homeImg, (W - BAR_W + 1) * S, 1 * S, LOGO_W * S, LOGO_W * S);
-  ctx.imageSmoothingEnabled = true;
-
-  // Team abbreviations rows 20-26
-  ctx.fillStyle = '#fff';
-  ctx.font = `bold ${6 * S}px 'Share Tech Mono', monospace`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'top';
-  ctx.fillText(game.away.abbreviation, BAR_W/2 * S, 20 * S);
-  ctx.fillText(game.home.abbreviation, (W - BAR_W/2) * S, 20 * S);
-
-  // 3×5 micro text renderer
-  function drawMicroText(txt, x, y, color) {
-    ctx.fillStyle = color;
-    let cx = x;
-    for (const ch of txt) {
-      const rows = DIGITS[ch] || DIGITS['-'];
-      if (!rows) { cx += 4; continue; }
-      rows.forEach((row, ry) => {
-        [...row].forEach((bit, rx) => {
-          if (bit === '1') ctx.fillRect((cx + rx) * S, (y + ry) * S, S, S);
-        });
-      });
-      cx += 4;
-    }
-  }
-  function microWidth(txt) { return (txt.length - 1) * 4 + 3; }
-
-  // 5×5 hash glyph matching Python's HASH_5, then 3×5 digits — mirrors draw_seed_label()
-  const HASH_5 = ["01010","11111","01010","11111","01010"];
-  function seedLabelW(seed) {
-    const digits = String(seed).length;
-    return 5 + 1 + digits * 4 - 1;   // 5px hash + 1px gap + digits (no trailing gap)
-  }
-  function drawSeedLabel(seed, x, y, color) {
-    ctx.fillStyle = color;
-    HASH_5.forEach((row, ry) => {
-      [...row].forEach((bit, rx) => {
-        if (bit === '1') ctx.fillRect((x + rx) * S, (y + ry) * S, S, S);
-      });
-    });
-    drawMicroText(String(seed), x + 6, y, color);   // 5px hash + 1px gap
-  }
-
-  // Team record / seed at row 27
-  for (const [team, barX, nudge] of [
-    [game.away, 0, 0],
-    [game.home, W - BAR_W, 1],
-  ]) {
-    const [r,g,b] = team.color;
-    const col = (r+g+b >= 60) ? rgbToHex(r,g,b) : '#505050';
-    if (game.is_playoff && team.seed) {
-      const lw = seedLabelW(team.seed);
-      const lx = barX + Math.floor((BAR_W - lw) / 2) + nudge;
-      drawSeedLabel(team.seed, lx, 27, col);
-    } else if (!game.is_playoff && team.record) {
-      const lw = microWidth(team.record);
-      const lx = barX + Math.floor((BAR_W - lw) / 2) + nudge;
-      drawMicroText(team.record, lx, 27, col);
-    }
-  }
-
-  // Header — period/status
-  let header = '';
-  let headerColor = '#ffc832';
-  if (game.is_halftime) { header = 'HALF'; headerColor = '#ff6a00'; }
-  else if (game.is_ot) { header = 'OT'; headerColor = '#b400ff'; }
-  else if (game.is_live) {
-    const labels = {1:'Q1',2:'Q2',3:'Q3',4:'Q4',5:'OT'};
-    header = labels[game.period] || `P${game.period}`;
-  }
-  else if (game.status === 'post') header = 'FINAL';
-  else { header = game.sport.toUpperCase(); headerColor = '#a0a0a0'; }
-
-  // Playoff game_label overrides header for non-live games (Super Bowl, Game 7, East 1st, etc.)
-  const gameLabelActive = game.is_playoff && game.game_label && !game.is_live;
-  if (gameLabelActive) { header = game.game_label.substring(0, 8); headerColor = '#b400ff'; }
-
-  ctx.fillStyle = headerColor;
-  ctx.font = `bold ${6 * S}px 'Share Tech Mono', monospace`;
-  ctx.textAlign = 'center';
-  const headerY = gameLabelActive ? 0 : 1;
-  ctx.fillText(header, CX * S, headerY * S);
-
-  // Big scores — pre-game shows VS instead of 0-0
-  if (game.status === 'pre') {
-    ctx.fillStyle = '#505050';
-    ctx.font = `bold ${5 * S}px 'Share Tech Mono', monospace`;
-    ctx.textAlign = 'center';
-    ctx.fillText('VS', CX * S, 10 * S);
-  } else {
-    drawBigScore(ctx, String(game.away.score), AWAY_CX, 6, '#ffffff', S);
-    drawBigDash(ctx, CX - 3, 6, '#404060', S);
-    drawBigScore(ctx, String(game.home.score), HOME_CX, 6, '#ffffff', S);
-  }
-
-  // Clock / start time
-  if (game.status === 'pre') {
-    ctx.fillStyle = '#ffc832';
-    ctx.font = `${5 * S}px 'Share Tech Mono', monospace`;
-    ctx.textAlign = 'center';
-    ctx.fillText((game.status_detail || 'UPCOMING').substring(0, 12), CX * S, 17 * S);
-    if (game.is_playoff && game.series_summary) {
-      ctx.fillStyle = '#b400ff';
-      ctx.fillText(game.series_summary, CX * S, 26 * S);
-    }
-  } else if (game.is_live && !game.is_halftime) {
-    ctx.fillStyle = '#ffc832';
-    ctx.font = `${5 * S}px 'Share Tech Mono', monospace`;
-    ctx.textAlign = 'center';
-    ctx.fillText(game.clock, CX * S, 16 * S);
-  }
-
-  // Timeout dots (NFL only) — match renderer: groups centred on AWAY_CX / HOME_CX
-  if (game.sport === 'nfl' && game.is_live) {
-    const maxTo = 3, dotW = 3, spacing = 5;
-    const groupW = maxTo * spacing - (spacing - dotW); // 13
-    const axStart = AWAY_CX - Math.floor(groupW / 2);
-    for (let i = 0; i < maxTo; i++) {
-      const xi = axStart + i * spacing;
-      ctx.fillStyle = i < game.away.timeouts ? '#ff8c00' : '#2a2a3a';
-      ctx.fillRect(xi * S, 22 * S, dotW * S, 3 * S);
-    }
-    const hxStart = HOME_CX - Math.floor(groupW / 2);
-    for (let i = 0; i < maxTo; i++) {
-      const xi = hxStart + i * spacing;
-      ctx.fillStyle = i < game.home.timeouts ? '#ff8c00' : '#2a2a3a';
-      ctx.fillRect(xi * S, 22 * S, dotW * S, 3 * S);
-    }
-  }
-
-  // Fouls (NFL only) — match renderer positions
-  if (game.sport === 'nfl' && game.is_live) {
-    ctx.fillStyle = '#dc3232';
-    ctx.font = `${5 * S}px 'Share Tech Mono', monospace`;
-    ctx.textAlign = 'left';
-    ctx.fillText(String(game.away.fouls), (LEFT_EDGE - 2) * S, 21 * S);
-    ctx.textAlign = 'right';
-    ctx.fillText(String(game.home.fouls), (RIGHT_EDGE + 2) * S, 21 * S);
-  }
-
-  // Down & distance (NFL only)
-  if (game.sport === 'nfl' && game.is_live && game.down_distance) {
-    ctx.fillStyle = '#646464';
-    ctx.font = `${5 * S}px 'Share Tech Mono', monospace`;
-    ctx.textAlign = 'center';
-    ctx.fillText(game.down_distance.replace('&', '-'), CX * S, 26 * S);
-  }
-
-  // Score differential
-  const diff = Math.abs(game.away.score - game.home.score);
-  if (diff > 0 && (game.is_live || game.status === 'post')) {
-    const diffStr = `+${diff}`;
-    const diffW = (diffStr.length - 1) * 4 + 3;
-    // Diff sits 1px outside the winning team's score, bottom-aligned (y=11, bottom at row 15)
-    if (game.away.score > game.home.score) {
-      const n = String(game.away.score).length;
-      const scoreW = n * 8 - 2;
-      const scoreLeft = AWAY_CX - Math.floor(scoreW / 2);
-      drawMicroText(diffStr, scoreLeft - diffW - 1, 11, '#00dc58');
-    } else {
-      const n = String(game.home.score).length;
-      const scoreW = n * 8 - 2;
-      const scoreRight = HOME_CX - Math.floor(scoreW / 2) + scoreW - 1;
-      drawMicroText(diffStr, scoreRight + 2, 11, '#00dc58');
-    }
-  }
-
-  // Series record (playoff) — live and post-game
-  if (game.is_playoff && game.series_summary && (game.is_live || game.status === 'post')) {
-    ctx.fillStyle = '#b400ff';
-    ctx.font = `${5 * S}px 'Share Tech Mono', monospace`;
-    ctx.textAlign = 'center';
-    ctx.fillText(game.series_summary, CX * S, 26 * S);
-  }
-
-  // Win probability bar — 1px after last lit pixel of each team's record/seed label
-  if (game.is_live) {
-    const awayIsSeeded = game.is_playoff && game.away.seed;
-    const homeIsSeeded = game.is_playoff && game.home.seed;
-    const awayLw = awayIsSeeded ? seedLabelW(game.away.seed) : (game.away.record ? microWidth(game.away.record) : 0);
-    const homeLw = homeIsSeeded ? seedLabelW(game.home.seed) : (game.home.record ? microWidth(game.home.record) : 0);
-    let barStart, barEnd;
-    if (awayLw) {
-      const lx = Math.floor((BAR_W - awayLw) / 2);
-      barStart = lx + awayLw + 1;
-    } else {
-      barStart = LEFT_EDGE;
-    }
-    if (homeLw) {
-      const lx = (W - BAR_W) + Math.floor((BAR_W - homeLw) / 2) + 1;
-      barEnd = lx - 2;
-    } else {
-      barEnd = RIGHT_EDGE - 1;
-    }
-    const barW = barEnd - barStart + 1;
-    if (barW > 0) {
-      const awayW = Math.round(barW * game.away_win_pct);
-      const homeW = barW - awayW;
-      if (awayW > 1) {
-        ctx.fillStyle = awayColor;
-        ctx.fillRect(barStart * S, 31 * S, (awayW - 1) * S, S);
-      }
-      ctx.fillStyle = '#000';
-      ctx.fillRect((barStart + awayW - 1) * S, 31 * S, S, S);
-      if (homeW > 0) {
-        ctx.fillStyle = homeColor;
-        ctx.fillRect((barStart + awayW) * S, 31 * S, homeW * S, S);
-      }
-    }
-  }
-
-  // Possession dot (NFL only, always shown when possession is set)
-  if (game.possession && game.is_live && game.sport === 'nfl') {
-    ctx.fillStyle = '#ffffff';
-    if (game.possession === game.away.abbreviation) {
-      ctx.fillRect((AWAY_CX - 1) * S, 17 * S, 3 * S, 1 * S);
-    } else if (game.possession === game.home.abbreviation) {
-      ctx.fillRect((HOME_CX - 1) * S, 17 * S, 3 * S, 1 * S);
-    }
-  }
-
-  // LED dot overlay
-  ctx.globalAlpha = 0.08;
-  for (let y = 0; y < H; y++) {
-    for (let x = 0; x < W; x++) {
-      ctx.fillStyle = '#000';
-      ctx.beginPath();
-      ctx.arc((x + 0.5) * S, (y + 0.5) * S, S * 0.22, 0, Math.PI * 2);
-      ctx.fill();
-    }
-  }
-  ctx.globalAlpha = 1;
 }
 
 const DIGITS = {
@@ -1941,7 +1512,6 @@ function pinGame(gameId, idx) {
   } else {
     settings.pinned_game = gameId;
   }
-  drawMatrix(games[idx]);
   renderGamesGrid();
   saveSettings();
 }
@@ -2017,6 +1587,33 @@ async function saveSettings() {
 }
 
 // ── System ───────────────────────────────────────────────────────────────────
+let displayOn = true;
+
+function updateDisplayToggle() {
+  document.getElementById('display-toggle').className = 'toggle-track' + (displayOn ? ' on' : '');
+  document.getElementById('display-label').textContent = displayOn ? 'On' : 'Off';
+}
+
+async function loadDisplayState() {
+  try {
+    const r = await fetch('/api/display');
+    displayOn = (await r.json()).on !== false;
+    updateDisplayToggle();
+  } catch(e) { console.error(e); }
+}
+
+async function toggleDisplay() {
+  const next = !displayOn;
+  try {
+    const r = await fetch('/api/display', {method:'POST', headers:{'Content-Type':'application/json'},
+                                           body:JSON.stringify({on: next})});
+    if (!r.ok) throw new Error(r.status);
+    displayOn = next;
+    updateDisplayToggle();
+    toast(displayOn ? 'Screen turned on' : 'Screen turned off');
+  } catch(e) { toast('Failed to change screen state', true); }
+}
+
 async function loadSysInfo() {
   try {
     const r = await fetch('/api/sysinfo');
@@ -2521,44 +2118,40 @@ async function forgetWifi() {
 }
 
 // ── Init ─────────────────────────────────────────────────────────────────────
+// Live preview: mirror the exact frame the LED matrix is showing
+let frameBusy = false;
+async function pollFrame() {
+  if (frameBusy || document.hidden) return;
+  if (!document.getElementById('page-dashboard').classList.contains('active')) return;
+  frameBusy = true;
+  try {
+    const r = await fetch('/api/frame.png', {cache: 'no-store'});
+    if (r.ok) {
+      const bmp = await createImageBitmap(await r.blob());
+      const c   = document.getElementById('matrix-preview');
+      if (c.width !== W * PIXEL_SCALE || c.height !== H * PIXEL_SCALE) {
+        c.width  = W * PIXEL_SCALE;
+        c.height = H * PIXEL_SCALE;
+      }
+      const ctx = c.getContext('2d');
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(bmp, 0, 0, c.width, c.height);
+      if (bmp.close) bmp.close();
+    }
+  } catch(e) {}
+  finally { frameBusy = false; }
+}
+
+// Caption under the preview (what game / weather is on screen)
 async function pollCurrentGame() {
   try {
     const r    = await fetch('/api/current');
     const game = await r.json();
     if (!game) return;
-
-    // Update label
     const label = game.mode === 'weather'
-      ? `${game.zip_code} · ${game.condition} · ${game.temp_f}°F · ${game.time}`
+      ? `${game.zip_code} · ${game.condition} · ${game.temp_f}°F`
       : `${game.away.abbreviation} ${game.away.score} — ${game.home.abbreviation} ${game.home.score} · ${game.status_detail}`;
     document.getElementById('preview-label').textContent = label;
-
-    const gid = game.game_id || game.mode || 'weather';
-
-    if (gid !== previewGameId && previewGameId !== null && !previewScrolling) {
-      // Game changed — capture current frame, render new game offscreen, scroll
-      const main = document.getElementById('matrix-preview');
-      const fromCanvas = document.createElement('canvas');
-      fromCanvas.width  = main.width;
-      fromCanvas.height = main.height;
-      fromCanvas.getContext('2d').drawImage(main, 0, 0);
-
-      const toCanvas = await drawMatrixOffscreen(game);
-      animatePreviewScroll(fromCanvas, toCanvas);
-    } else if (!previewScrolling) {
-      // Same game — check for score change and flash
-      if (game.mode !== 'weather' && game.is_live) {
-        const prev = previewScores[gid];
-        if (prev) {
-          if (game.away.score > prev.away)       animatePreviewFlash('away', game);
-          else if (game.home.score > prev.home)  animatePreviewFlash('home', game);
-        }
-        previewScores[gid] = { away: game.away.score, home: game.home.score };
-      }
-      drawMatrix(game);
-    }
-
-    previewGameId = gid;
   } catch(e) {}
 }
 
@@ -2568,6 +2161,8 @@ async function init() {
   await loadGames();
   await loadSysInfo();
   await pollCurrentGame();       // seed preview immediately, no blank gap on load
+  pollFrame();
+  setInterval(pollFrame, 200);
   setInterval(pollCurrentGame, 1000);
   setInterval(loadGames, 15000);
   setInterval(loadSysInfo, 30000);

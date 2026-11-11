@@ -69,4 +69,4 @@ echo "[ap_start] Adding iptables redirect for captive portal..."
 iptables -t nat -A PREROUTING -i wlan0 -p tcp --dport 80 -j DNAT --to-destination "${AP_IP}:80" 2>/dev/null || true
 
 echo "[ap_start] Starting captive portal on port 80..."
-exec /home/admin/rgbmatrix/bin/python3 "$PORTAL_PY"
+exec /home/admin/scoratron/venv/bin/python3 "$PORTAL_PY"
