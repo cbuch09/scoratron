@@ -18,6 +18,15 @@ def signal_handler(sig, frame):
     print("\nShutting down...")
     sys.exit(0)
 
+CURRENT_FILE = '/tmp/scoratron_current.json'
+
+def _write_current(data):
+    """Atomically replace the preview file so the web UI never reads it half-written."""
+    tmp = CURRENT_FILE + '.tmp'
+    with open(tmp, 'w') as f:
+        json.dump(data, f)
+    os.replace(tmp, CURRENT_FILE)
+
 def write_preview(game):
     """Write current game state to a file for the web UI to read."""
     try:
@@ -59,8 +68,7 @@ def write_preview(game):
                 'seed': game.home.seed,
             },
         }
-        with open('/tmp/scoratron_current.json', 'w') as f:
-            json.dump(data, f)
+        _write_current(data)
     except Exception as e:
         print(f'[preview] write error: {e}')
 
@@ -71,8 +79,7 @@ def write_weather_preview(weather):
         data = dict(weather)
         data['mode'] = 'weather'
         data['time'] = datetime.datetime.now().strftime("%-I:%M:%S %p")
-        with open('/tmp/scoratron_current.json', 'w') as f:
-            json.dump(data, f)
+        _write_current(data)
     except Exception as e:
         print(f'[preview] weather write error: {e}')
 
@@ -96,45 +103,32 @@ def has_network():
     except OSError:
         return False
 
-_SETTINGS_SEED = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'settings.json')
-SETTINGS_FILE  = '/tmp/scoratron_settings.json'
-
-DEFAULT_SETTINGS = {
-    'sport': 'auto',
-    'scroll': True,
-    'scroll_dwell': 10,
-    'refresh_rate': 15,
-    'live_refresh_rate': 5,
-    'brightness': 60,
-    'pinned_game': None,
-    'zip_code': '',
-    'force_weather': False,
-    'continuous_scroll': False,
-}
+from settings_store import load_settings, init_settings
 
 def load_webui_settings():
-    if not os.path.exists(SETTINGS_FILE):
-        # Seed from repo settings.json if available, else use defaults
-        seed = DEFAULT_SETTINGS.copy()
-        if os.path.exists(_SETTINGS_SEED):
-            try:
-                with open(_SETTINGS_SEED) as f:
-                    seed.update(json.load(f))
-            except Exception:
-                pass
-        try:
-            with open(SETTINGS_FILE, 'w') as f:
-                json.dump(seed, f, indent=2)
-            print(f'[settings] seeded {SETTINGS_FILE} from repo defaults')
-        except Exception as e:
-            print(f'[settings] could not seed settings: {e}')
-        return seed
+    return load_settings()
+
+def _parse_hhmm(value, default):
     try:
-        with open(SETTINGS_FILE) as f:
-            return json.load(f)
-    except Exception as e:
-        print(f'[settings] load error: {e}')
-    return None
+        h, m = str(value).split(':')
+        return int(h) * 60 + int(m)
+    except Exception:
+        return default
+
+def in_night_window(settings, now=None):
+    """True if the current local time is inside the night schedule.
+    Handles windows that cross midnight (e.g. 23:00 -> 08:00)."""
+    if not settings or not settings.get('night_enabled'):
+        return False
+    start = _parse_hhmm(settings.get('night_start'), 23 * 60)
+    end   = _parse_hhmm(settings.get('night_end'), 8 * 60)
+    now   = now or datetime.now()
+    cur   = now.hour * 60 + now.minute
+    if start == end:
+        return False
+    if start < end:
+        return start <= cur < end
+    return cur >= start or cur < end
 
 def load_wifi_setup_active():
     path = '/tmp/scoratron_wifi_setup.json'
@@ -364,6 +358,8 @@ def main():
     parser.add_argument("--no-logo", action="store_true")
     args = parser.parse_args()
 
+    init_settings()
+
     # Override CLI args with web UI settings if available
     webui = load_webui_settings()
     if webui:
@@ -420,6 +416,7 @@ def main():
 
     applied_brightness = args.brightness
     display_was_on = True
+    night_active = False
 
     while True:
         now = time.time()
@@ -427,14 +424,22 @@ def main():
         # Reload webui settings on each refresh cycle
         webui = load_webui_settings()
 
-        # Apply brightness changes immediately without a restart
+        # Apply brightness changes immediately without a restart.
+        # During the night schedule the night brightness overrides the normal one.
         if webui:
-            new_brightness = int(webui.get('brightness', applied_brightness))
+            night = in_night_window(webui)
+            if night:
+                new_brightness = int(webui.get('night_brightness', 30))
+            else:
+                new_brightness = int(webui.get('brightness', applied_brightness))
+            if night != night_active:
+                night_active = night
+                print(f'[night] schedule {"started" if night else "ended"}')
             if new_brightness != applied_brightness:
                 applied_brightness = new_brightness
                 if renderer._matrix:
                     renderer._matrix.brightness = new_brightness
-                    print(f'[settings] brightness → {new_brightness}%')
+                    print(f'[settings] brightness → {new_brightness}%{" (night)" if night else ""}')
 
         # Check if WiFi setup is active — show setup instructions instead of scores
         if load_wifi_setup_active():

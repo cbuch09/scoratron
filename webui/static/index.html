@@ -348,6 +348,12 @@ nav {
   margin-bottom: 12px;
 }
 
+.night-time {
+  background: var(--surface); border: 1px solid var(--border); border-radius: 6px;
+  padding: 5px 8px; color: var(--text); font-family: var(--mono); font-size: 12px;
+  color-scheme: dark;
+}
+[data-theme="light"] .night-time { color-scheme: light; }
 input[type=range] {
   width: 100%;
   -webkit-appearance: none;
@@ -892,6 +898,23 @@ pre {
         <div class="toggle-track" id="contscroll-toggle"><div class="toggle-thumb"></div></div>
         <span class="toggle-label" id="contscroll-label">Disabled</span>
       </div>
+    </div>
+
+    <div class="control-card">
+      <div class="control-label">Night Schedule</div>
+      <div style="font-size:11px;color:#606080;margin-bottom:8px">Dims the board overnight — overrides Brightness while active</div>
+      <div class="toggle" onclick="toggleNight()">
+        <div class="toggle-track" id="night-toggle"><div class="toggle-thumb"></div></div>
+        <span class="toggle-label" id="night-label">Enabled</span>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;margin:12px 0 10px;font-size:12px;color:var(--muted)">
+        <input type="time" id="ctrl-night-start" value="23:00" class="night-time">
+        <span>to</span>
+        <input type="time" id="ctrl-night-end" value="08:00" class="night-time">
+      </div>
+      <div class="control-value"><span id="night-brightness-val">30</span>%</div>
+      <input type="range" id="ctrl-night-brightness" min="5" max="100" step="5" value="30"
+             oninput="document.getElementById('night-brightness-val').textContent=this.value">
     </div>
 
 
@@ -1532,6 +1555,12 @@ async function loadSettings() {
     updateScrollToggle();
     continuousScrollEnabled = settings.continuous_scroll === true;
     updateContinuousScrollToggle();
+    nightEnabled = settings.night_enabled !== false;
+    updateNightToggle();
+    document.getElementById('ctrl-night-start').value = settings.night_start || '23:00';
+    document.getElementById('ctrl-night-end').value   = settings.night_end   || '08:00';
+    document.getElementById('ctrl-night-brightness').value = settings.night_brightness || 30;
+    document.getElementById('night-brightness-val').textContent = settings.night_brightness || 30;
   } catch(e) { console.error(e); }
 }
 
@@ -1558,6 +1587,18 @@ function updateContinuousScrollToggle() {
   label.textContent = continuousScrollEnabled ? 'Enabled' : 'Disabled';
 }
 
+let nightEnabled = true;
+
+function updateNightToggle() {
+  document.getElementById('night-toggle').className = 'toggle-track' + (nightEnabled ? ' on' : '');
+  document.getElementById('night-label').textContent = nightEnabled ? 'Enabled' : 'Disabled';
+}
+
+function toggleNight() {
+  nightEnabled = !nightEnabled;
+  updateNightToggle();
+}
+
 function toggleContinuousScroll() {
   continuousScrollEnabled = !continuousScrollEnabled;
   updateContinuousScrollToggle();
@@ -1572,11 +1613,15 @@ async function applySettings() {
     brightness: parseInt(document.getElementById('ctrl-brightness').value),
     pinned_game: settings.pinned_game || null,
     continuous_scroll: continuousScrollEnabled,
+    night_enabled: nightEnabled,
+    night_start: document.getElementById('ctrl-night-start').value || '23:00',
+    night_end: document.getElementById('ctrl-night-end').value || '08:00',
+    night_brightness: parseInt(document.getElementById('ctrl-night-brightness').value),
   };
   try {
     await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(s)});
     settings = s;
-    toast('Settings applied — restarting service...');
+    toast('Settings applied');
   } catch(e) { toast('Failed to apply settings', true); }
 }
 

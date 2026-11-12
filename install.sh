@@ -200,6 +200,31 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
+# ── Daily auto-update from GitHub (10 PM local time) ────────────────────────
+echo "==> Installing daily auto-update timer..."
+chmod +x "$INSTALL_DIR/auto_update.sh"
+cat > /etc/systemd/system/scoratron-update.service <<EOF
+[Unit]
+Description=Scoratron auto-update from GitHub
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash $INSTALL_DIR/auto_update.sh
+EOF
+
+cat > /etc/systemd/system/scoratron-update.timer <<'EOF'
+[Unit]
+Description=Daily Scoratron auto-update (10 PM)
+
+[Timer]
+OnCalendar=*-*-* 22:00:00
+
+[Install]
+WantedBy=timers.target
+EOF
+
 # ── NetworkManager dispatcher for WiFi setup AP ───────────────────────────────
 echo "==> Installing NetworkManager dispatcher..."
 if [ -f "$INSTALL_DIR/wifi_setup/nm-dispatcher.sh" ]; then
@@ -215,6 +240,7 @@ bash "$INSTALL_DIR/wifi_setup/install.sh"
 
 systemctl daemon-reload
 systemctl enable scoratron scoratron-web
+systemctl enable --now scoratron-update.timer
 systemctl restart scoratron scoratron-web
 
 echo ""

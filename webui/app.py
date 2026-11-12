@@ -29,49 +29,10 @@ from models import GameState, TeamInfo
 app = Flask(__name__, static_folder='static')
 
 CERT = '/etc/ssl/certs/ca-certificates.crt'
-SETTINGS_FILE = '/tmp/scoratron_settings.json'
-_SETTINGS_SEED = os.path.join(SCORATRON_DIR, 'settings.json')
 SIM_FILE = '/tmp/scoratron_sim.json'
 PARADE_FILE = '/tmp/scoratron_parade.json'
 
-DEFAULT_SETTINGS = {
-    'sport': 'auto',
-    'scroll': True,
-    'scroll_dwell': 10,
-    'refresh_rate': 15,
-    'brightness': 60,
-    'pinned_game': None,
-    'zip_code': '',
-    'force_weather': False,
-    'continuous_scroll': False,
-}
-
-def load_settings():
-    if os.path.exists(SETTINGS_FILE):
-        with open(SETTINGS_FILE) as f:
-            s = DEFAULT_SETTINGS.copy()
-            s.update(json.load(f))
-            return s
-    return DEFAULT_SETTINGS.copy()
-
-def save_settings(s):
-    try:
-        with open(SETTINGS_FILE, 'w') as f:
-            json.dump(s, f, indent=2)
-    except Exception as e:
-        print(f'[settings] save error: {e}')
-
-def init_settings():
-    """Write default settings on first run so the file always exists."""
-    if not os.path.exists(SETTINGS_FILE):
-        seed = DEFAULT_SETTINGS.copy()
-        if os.path.exists(_SETTINGS_SEED):
-            try:
-                with open(_SETTINGS_SEED) as f:
-                    seed.update(json.load(f))
-            except Exception:
-                pass
-        save_settings(seed)
+from settings_store import load_settings, save_settings, init_settings, DEFAULT_SETTINGS
 
 # ── Cache ──────────────────────────────────────────────────────────────────
 cache = {
@@ -200,13 +161,15 @@ def _set_timezone_for_zip(zip_code):
 @app.route('/api/settings', methods=['POST'])
 def api_post_settings():
     s = load_settings()
-    old_zip = s.get('zip_code', '')
-    s.update(request.json)
+    before = dict(s)
+    s.update(request.json or {})
     save_settings(s)
     new_zip = s.get('zip_code', '')
-    if new_zip != old_zip:
-        if new_zip:
-            _set_timezone_for_zip(new_zip)
+    if new_zip != before.get('zip_code', '') and new_zip:
+        _set_timezone_for_zip(new_zip)
+    # These are only read when the display starts, so restart it to apply them
+    startup_keys = ('zip_code', 'sport', 'refresh_rate')
+    if any(s.get(k) != before.get(k) for k in startup_keys):
         subprocess.Popen(['sudo', 'systemctl', 'restart', 'scoratron'])
     return jsonify({'ok': True})
 

@@ -15,6 +15,7 @@ Row layout:
   Row 28-31: Fouls/penalties (live only)
 """
 
+import math
 import time
 import datetime
 import os
@@ -164,6 +165,39 @@ def draw_big_score(draw, score_str, cx, y, color):
 # matrix shows. Written by a background thread at most every MIRROR_INTERVAL s.
 MIRROR_FILE     = '/tmp/scoratron_frame.png'
 MIRROR_INTERVAL = 0.2
+
+
+COUNTDOWN_MINUTES = 60              # switch from start time to countdown inside this window
+COLOR_STARTING    = (80, 220, 80)
+
+
+def minutes_until_start(game, now=None):
+    """Minutes (float) until the game's scheduled start, or None if unknown."""
+    if not game.start_time_utc:
+        return None
+    try:
+        start = datetime.datetime.fromisoformat(game.start_time_utc.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    now = now or datetime.datetime.now(datetime.timezone.utc)
+    return (start - now).total_seconds() / 60
+
+
+def pregame_label(game, now=None):
+    """Text + colour for an upcoming game's clock row.
+
+    > 60 min out : the start time from ESPN (e.g. "4:00 PM")
+    1-60 min out : "IN 45 MIN"
+    start passed : blinking "STARTING" until ESPN marks the game live
+    Returns ("", colour) on the 'off' half of the blink.
+    """
+    mins = minutes_until_start(game, now)
+    if mins is None or mins > COUNTDOWN_MINUTES:
+        return (game.status_detail or "UPCOMING")[:12], COLOR_CLOCK
+    if mins > 0:
+        return f"IN {max(1, math.ceil(mins))} MIN", COLOR_CLOCK
+    blink_on = int(time.time() * 2) % 2 == 0     # toggles every 0.5 s
+    return ("STARTING" if blink_on else ""), COLOR_STARTING
 
 
 class ScoreBugRenderer:
@@ -591,10 +625,11 @@ class ScoreBugRenderer:
 
     def _draw_clock(self, draw, game):
         if game.status == "pre":
-            # Show start time prominently for upcoming games
-            time_str = (game.status_detail or "UPCOMING")[:12]
-            w = text_width(time_str, FONT)
-            draw.text((CX - w // 2, 17), time_str, font=FONT, fill=COLOR_CLOCK)
+            # Upcoming game: start time, or a countdown once it's close
+            time_str, color = pregame_label(game)
+            if time_str:
+                w = text_width(time_str, FONT)
+                draw.text((CX - w // 2, 17), time_str, font=FONT, fill=color)
             if game.is_playoff and game.series_summary:
                 w = text_width(game.series_summary, FONT)
                 draw.text((CX - w // 2, 25), game.series_summary, font=FONT, fill=(180, 0, 255))
