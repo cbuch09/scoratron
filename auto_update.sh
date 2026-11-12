@@ -40,8 +40,12 @@ if grep -qx 'requirements.txt' <<<"$changed"; then
     "$VENV/bin/pip" install -q -r "$DIR/requirements.txt" || log "WARNING: pip install failed"
 fi
 
-if grep -qE '^(install\.sh|wifi_setup/)' <<<"$changed"; then
-    log "NOTE: installer/system files changed — run 'sudo bash $DIR/install.sh' to apply them"
+if grep -q '^wifi_setup/' <<<"$changed"; then
+    log "wifi_setup changed — re-running its installer"
+    bash "$DIR/wifi_setup/install.sh" >/dev/null || log "WARNING: wifi_setup/install.sh failed"
+fi
+if grep -qx 'install.sh' <<<"$changed"; then
+    log "NOTE: install.sh changed — run 'sudo bash $DIR/install.sh' to apply system changes"
 fi
 
 log "restarting services"

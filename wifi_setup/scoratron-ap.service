@@ -1,0 +1,11 @@
+[Unit]
+Description=Scoratron WiFi setup hotspot + captive portal
+After=NetworkManager.service
+Wants=NetworkManager.service
+
+[Service]
+Type=simple
+User=root
+ExecStart=/home/admin/scoratron/wifi_setup/ap_start.sh
+ExecStopPost=/home/admin/scoratron/wifi_setup/ap_stop.sh
+TimeoutStopSec=15

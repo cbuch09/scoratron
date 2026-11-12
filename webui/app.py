@@ -463,34 +463,28 @@ def api_wifi_connect():
 
 @app.route('/api/wifi/forget', methods=['POST'])
 def api_wifi_forget():
+    """Delete the current WiFi profile and switch straight into setup-hotspot
+    mode (scoratron-ap.service) — no reboot needed."""
     data = request.json or {}
     ssid = data.get('ssid', '').strip()
-    if not ssid:
-        return jsonify({'ok': False, 'error': 'No SSID provided'}), 400
     try:
-        result = subprocess.run(
-            ['nmcli', 'connection', 'delete', ssid],
-            capture_output=True, text=True, timeout=10
-        )
-        if result.returncode == 0:
-            # Signal main.py to show the WiFi setup screen
-            try:
-                with open('/tmp/scoratron_wifi_setup.json', 'w') as f:
-                    import json as _json
-                    _json.dump({'active': True}, f)
-            except Exception:
-                pass
-            # Use systemd-run to launch AP in its own transient unit so it
-            # survives scoratron-web being stopped by ap_start.sh
-            ap_script = os.path.join(SCORATRON_DIR, 'wifi_setup', 'ap_start.sh')
-            subprocess.Popen(
-                ['systemd-run', '--no-block', '--unit=scoratron-ap',
-                 '--description=Scoratron WiFi Setup AP',
-                 'bash', ap_script],
-                stdout=open('/tmp/scoratron_wifi_setup.log', 'w'),
-                stderr=subprocess.STDOUT)
-        return jsonify({'ok': result.returncode == 0,
-                        'msg': (result.stdout or result.stderr).strip()})
+        # Prefer the profile actually active on wlan0 (its name can differ from the SSID)
+        r = subprocess.run(['nmcli', '-g', 'GENERAL.CONNECTION', 'device', 'show', 'wlan0'],
+                           capture_output=True, text=True, timeout=5)
+        active = r.stdout.strip()
+        target = active or ssid
+        if not target:
+            return jsonify({'ok': False, 'error': 'No WiFi network to forget'}), 400
+        if target == 'Scoratron-Setup':
+            return jsonify({'ok': False, 'error': 'Already in WiFi setup mode'}), 400
+        result = subprocess.run(['nmcli', 'connection', 'delete', 'id', target],
+                                capture_output=True, text=True, timeout=10)
+        if result.returncode != 0:
+            return jsonify({'ok': False,
+                            'error': (result.stderr or result.stdout).strip() or 'delete failed'})
+        # Start the hotspot in its own unit; it stops this web UI once it's up.
+        subprocess.Popen(['systemctl', 'restart', '--no-block', 'scoratron-ap'])
+        return jsonify({'ok': True, 'msg': f'Forgot {target}. Switching to setup mode.'})
     except Exception as e:
         return jsonify({'ok': False, 'error': str(e)}), 500
 

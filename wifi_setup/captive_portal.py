@@ -15,7 +15,8 @@ app = Flask(__name__)
 
 AP_IP        = "192.168.4.1"
 SCAN_FILE    = "/tmp/scoratron_wifi_scan.txt"
-CONNECT_SCRIPT = "/home/admin/scoratron/wifi_setup/do_connect.sh"
+REQUEST_FILE = "/run/scoratron-wifi-request"     # read (and deleted) by do_connect.sh
+ERROR_FILE   = "/tmp/scoratron_wifi_error.txt"   # written by do_connect.sh on failure
 
 # ── HTML template ──────────────────────────────────────────────────────────────
 
@@ -95,8 +96,9 @@ HTML = """<!DOCTYPE html>
   {% endif %}
 
   <p class="hint">
-    After connecting, Scoratron will reboot and join your network.<br>
-    Reconnect your device to your home WiFi when done.
+    After you tap Connect, this setup network will disappear while Scoratron
+    joins your WiFi. The board shows its new IP address when it's online.
+    If it can't connect, "Scoratron-Setup" comes back so you can try again.
   </p>
 </div>
 <script>
@@ -111,6 +113,14 @@ function toggleManual() {
 """
 
 # ── Helpers ────────────────────────────────────────────────────────────────────
+
+def load_error():
+    """Message from a failed connect attempt, if any."""
+    try:
+        with open(ERROR_FILE) as f:
+            return f.read().strip() or None
+    except Exception:
+        return None
 
 def load_scan():
     """Return list of SSIDs collected before AP mode started."""
@@ -148,7 +158,7 @@ def catch_all(path):
     if host != AP_IP:
         return redirect(f'http://{AP_IP}/', 302)
     networks = load_scan()
-    return render_template_string(HTML, networks=networks, message=None, success=False)
+    return render_template_string(HTML, networks=networks, message=load_error(), success=False)
 
 @app.route('/connect', methods=['POST'])
 def connect():
@@ -169,14 +179,23 @@ def connect():
                                       message="Password is too long (max 63 characters).",
                                       success=False)
 
-    # Launch do_connect.sh in background — it tears down the AP and reboots
-    subprocess.Popen(['bash', CONNECT_SCRIPT, ssid, password])
+    # Hand off to do_connect.sh in its own unit: it stops this portal's unit
+    # (scoratron-ap) and joins the network. Credentials go via a root-only file.
+    fd = os.open(REQUEST_FILE, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, 'w') as f:
+        f.write(f"{ssid}\n{password}\n")
+    try:
+        os.remove(ERROR_FILE)
+    except FileNotFoundError:
+        pass
+    subprocess.Popen(['systemctl', 'start', '--no-block', 'scoratron-wifi-connect'])
 
     return render_template_string(HTML, networks=[],
                                   message=(
                                       f"Connecting to \"{ssid}\"... "
-                                      "Scoratron will reboot in a few seconds. "
-                                      "Reconnect your device to your home WiFi."
+                                      "This setup network will now disappear. "
+                                      "Reconnect your phone to your home WiFi — the board "
+                                      "will show its IP address once it's online (about 20 seconds)."
                                   ),
                                   success=True)
 

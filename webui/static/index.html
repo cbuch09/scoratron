@@ -2149,7 +2149,7 @@ async function connectWifi() {
 async function forgetWifi() {
   const ssid = document.getElementById('wifi-current').textContent.replace(/^● /, '');
   if (!ssid || ssid === 'Not connected') return;
-  if (!confirm(`Forget "${ssid}"? The device will reboot into WiFi setup mode on next restart.`)) return;
+  if (!confirm(`Forget "${ssid}"?\n\nThe board will go offline and broadcast "Scoratron-Setup" within about 15 seconds. Join that network from your phone to pick a new WiFi network. This page will stop responding.`)) return;
   try {
     const r = await fetch('/api/wifi/forget', {
       method: 'POST',
@@ -2157,8 +2157,7 @@ async function forgetWifi() {
       body: JSON.stringify({ssid})
     });
     const d = await r.json();
-    toast(d.ok ? `Forgot ${ssid}` : (d.error || 'Failed'), !d.ok);
-    if (d.ok) loadWifiStatus();
+    toast(d.ok ? (d.msg || `Forgot ${ssid}`) : (d.error || 'Failed'), !d.ok);
   } catch(e) { toast('Request failed', true); }
 }
 
