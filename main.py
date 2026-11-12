@@ -405,6 +405,7 @@ def main():
     last_fetch = 0
     last_scroll_time = time.time()
     games = []
+    all_games = []      # every game in the feed (pins may target any of them)
     last_scores = {}
     linger_until = {}
     scroll_offset = 0
@@ -500,6 +501,7 @@ def main():
                 g = fetcher.fetch_games()
                 if g:
                     new_games.extend(g)
+            all_games = list(new_games)
 
             # Assign linger windows to finished games.
             # Games whose start time is > 6 hours ago are stale (off-season relics,
@@ -635,16 +637,25 @@ def main():
         def current_weather():
             return get_weather(zip_code) if zip_code else get_weather_by_ip()
 
+        # Pinned game from the web UI — may be any game in the feed, even one the
+        # rotation would skip (e.g. an upcoming game while others are live).
+        # A pin on a game that's no longer in the feed is ignored.
+        pinned_id = webui.get('pinned_game') if webui else None
+        pinned_game = None
+        if pinned_id:
+            pinned_game = (next((g for g in games if g.game_id == pinned_id), None)
+                           or next((g for g in all_games if g.game_id == pinned_id), None))
+            if pinned_game is None:
+                pinned_id = None
+
         # No games today — weather/time card only
-        if not games:
+        if not games and not pinned_game:
             weather = current_weather()
             renderer.draw_weather(weather)
             if weather:
                 write_weather_preview(weather)
             time.sleep(0.5)
             continue
-
-        pinned_id = webui.get('pinned_game') if webui else None
 
         # Continuous scroll mode (games only)
         if webui and webui.get('continuous_scroll') and len(games) > 1 and not pinned_id:
@@ -663,9 +674,12 @@ def main():
             slots.append(WEATHER_SLOT)
 
         # Pick slot to show — pinned game from web UI wins
-        if pinned_id:
-            pinned_matches = [i for i, g in enumerate(games) if g.game_id == pinned_id]
-            idx = pinned_matches[0] if pinned_matches else current_game_idx % len(slots)
+        if pinned_game is not None:
+            ids = [getattr(x, 'game_id', None) for x in slots]
+            if pinned_id not in ids:
+                slots.insert(0, pinned_game)
+                ids.insert(0, pinned_id)
+            idx = ids.index(pinned_id)
         elif config.game_index is not None:
             idx = min(config.game_index, len(games) - 1)
         else:

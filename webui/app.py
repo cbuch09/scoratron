@@ -169,7 +169,7 @@ def api_post_settings():
         _set_timezone_for_zip(new_zip)
     # These are only read when the display starts, so restart it to apply them
     startup_keys = ('zip_code', 'sport', 'refresh_rate')
-    if any(s.get(k) != before.get(k) for k in startup_keys):
+    if any(str(s.get(k)) != str(before.get(k)) for k in startup_keys):
         subprocess.Popen(['sudo', 'systemctl', 'restart', 'scoratron'])
     return jsonify({'ok': True})
 

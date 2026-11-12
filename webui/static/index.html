@@ -1536,7 +1536,11 @@ function pinGame(gameId, idx) {
     settings.pinned_game = gameId;
   }
   renderGamesGrid();
-  saveSettings();
+  // Send only the pin so a stale page can't overwrite other settings
+  fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'},
+        body: JSON.stringify({pinned_game: settings.pinned_game})})
+    .then(() => toast(settings.pinned_game ? 'Pinned — board will stay on this game' : 'Unpinned — rotation resumed'))
+    .catch(() => toast('Failed to save pin', true));
 }
 
 // ── Settings ─────────────────────────────────────────────────────────────────
@@ -1620,7 +1624,7 @@ async function applySettings() {
   };
   try {
     await fetch('/api/settings', {method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(s)});
-    settings = s;
+    settings = {...settings, ...s};
     toast('Settings applied');
   } catch(e) { toast('Failed to apply settings', true); }
 }
