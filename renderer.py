@@ -657,7 +657,7 @@ class ScoreBugRenderer:
 
     def _draw_timeouts(self, draw, game):
         """Timeout dots — NFL only, ESPN doesn't provide NBA timeout data."""
-        if game.sport != "nfl":
+        if game.sport != "nfl" or min(game.away.timeouts, game.home.timeouts) < 0:
             return
         max_to  = 3
         y       = 22
@@ -680,7 +680,7 @@ class ScoreBugRenderer:
 
     def _draw_fouls(self, draw, game):
         """Penalty/foul counts — NFL only, ESPN doesn't provide NBA foul data."""
-        if game.sport != "nfl":
+        if game.sport != "nfl" or min(game.away.fouls, game.home.fouls) < 0:
             return
         y = 21
         draw.text((LEFT_EDGE - 2, y), str(game.away.fouls), font=FONT, fill=COLOR_PENALTY)

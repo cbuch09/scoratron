@@ -21,6 +21,12 @@ _SEED_ENDPOINTS = {
 }
 _seed_cache: dict = {}   # {sport: {team_abbr: seed}}
 
+# NFL penalties aren't on the scoreboard feed — only in the per-game summary
+# (~250 KB), so fetch it for live games at most once a minute and cache it.
+_SUMMARY_URL = 'https://site.api.espn.com/apis/site/v2/sports/football/nfl/summary'
+PENALTY_REFRESH = 60     # seconds
+_penalty_cache: dict = {}  # {game_id: (fetched_at, {'home': n, 'away': n})}
+
 def _fetch_playoff_seeds(sport: str, session) -> dict:
     """Return {abbr: seed} for current playoff teams. Cached for the session."""
     if sport in _seed_cache:
@@ -45,6 +51,32 @@ def _fetch_playoff_seeds(sport: str, session) -> dict:
     except Exception as e:
         print(f'[fetcher] seed fetch error: {e}')
         return {}
+
+def _fetch_nfl_penalties(game_id: str, session) -> dict:
+    """Return {'home': count, 'away': count} for a game, or {} if unavailable."""
+    import time
+    now = time.time()
+    hit = _penalty_cache.get(game_id)
+    if hit and now - hit[0] < PENALTY_REFRESH:
+        return hit[1]
+    result = {}
+    try:
+        r = session.get(_SUMMARY_URL, params={'event': game_id}, timeout=REQUEST_TIMEOUT,
+                        verify='/etc/ssl/certs/ca-certificates.crt')
+        r.raise_for_status()
+        for t in r.json().get('boxscore', {}).get('teams', []):
+            for stat in t.get('statistics', []):
+                if stat.get('name') == 'totalPenaltiesYards':     # e.g. "3-25"
+                    result[t.get('homeAway')] = int(str(stat.get('displayValue', '0-0')).split('-')[0])
+    except Exception as e:
+        print(f'[fetcher] penalty fetch error for {game_id}: {e}')
+        if hit:
+            return hit[1]            # keep showing the last good numbers
+    _penalty_cache[game_id] = (now, result)
+    # Forget games that haven't been asked about for a while
+    for gid in [g for g, (t, _) in _penalty_cache.items() if now - t > 6 * 3600]:
+        _penalty_cache.pop(gid, None)
+    return result
 
 class ScoreFetcher:
     def __init__(self, config: Config):
@@ -126,6 +158,10 @@ class ScoreFetcher:
             if len(competitors) < 2:
                 return None
 
+            situation = comp.get("situation", {}) or {}
+            penalties = (_fetch_nfl_penalties(game_id, self.session)
+                         if sport == "nfl" and is_live else {})
+
             home = away = None
             home_comp = away_comp = {}
             for c in competitors:
@@ -134,18 +170,18 @@ class ScoreFetcher:
                 name  = team_data.get("displayName", "Unknown")
                 score = int(c.get("score", 0) or 0)
 
-                # Timeouts
-                if sport == "nfl":
-                    timeouts = c.get("timeouts", 3)
-                else:
-                    timeouts = 0  # ESPN doesn't provide NBA timeout data
+                side = "home" if c.get("homeAway") == "home" else "away"
 
-                # NFL penalties / NBA team fouls
-                fouls = 0
-                stats = c.get("statistics", [])
-                for stat in stats:
-                    if sport == "nfl" and stat.get("name") == "totalPenaltiesYards":
-                        fouls = int(stat.get("displayValue", "0-0").split("-")[0])
+                # NFL timeouts remaining — in the game's situation block.
+                # -1 = unknown (not shown). ESPN has no NBA timeout data.
+                timeouts = -1
+                if sport == "nfl":
+                    t = situation.get(f"{side}Timeouts")
+                    if isinstance(t, int):
+                        timeouts = max(0, min(3, t))
+
+                # NFL penalty count from the game summary. -1 = unknown (not shown).
+                fouls = penalties.get(side, -1) if sport == "nfl" else -1
 
                 color = TEAM_COLORS.get(abbr, (128, 128, 128))
                 logo_path = self._logo_path(abbr)
@@ -184,16 +220,19 @@ class ScoreFetcher:
             # Possession — NFL has explicit possession field, NBA inferred from lastPlay
             possession = None
             down_distance = None
-            situation = comp.get("situation", {})
             if sport == "nfl" and is_live:
                 poss_team = situation.get("possession", {})
                 if isinstance(poss_team, dict):
                     possession = poss_team.get("abbreviation")
                 elif isinstance(poss_team, str):
                     possession = poss_team
+                # ESPN sends the team *id* here — convert to the abbreviation
+                ids = {str(away_comp.get("team", {}).get("id", "")): away.abbreviation,
+                       str(home_comp.get("team", {}).get("id", "")): home.abbreviation}
+                possession = ids.get(str(possession), possession)
                 down = situation.get("down")
                 distance = situation.get("distance")
-                if down:
+                if isinstance(down, int) and 1 <= down <= 4:
                     down_str = {1:"1st",2:"2nd",3:"3rd",4:"4th"}.get(down, str(down))
                     down_distance = f"{down_str}-{distance}"
 
